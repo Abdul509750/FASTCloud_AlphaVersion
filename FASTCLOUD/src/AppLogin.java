@@ -21,15 +21,13 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 import javafx.util.Duration;
-import javafx.animation.Timeline;
-import javafx.animation.KeyFrame;
-import javafx.animation.KeyValue;
 import javafx.scene.effect.Glow;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.control.ListView;
 import javafx.scene.control.Separator;
 import javafx.collections.FXCollections;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ScrollPane;
 
 public class AppLogin extends Application {
 
@@ -45,7 +43,7 @@ public class AppLogin extends Application {
         content.setPadding(new Insets(30));
 
         // ===== LOGO =====
-        Image logoImage = new Image("file:/home/rafay/FASTCloud_AplhaVersion/FASTCLOUD/src/FinalLogo.png");
+        Image logoImage = new Image("file:/home/rafay/FASTCloud_AplhaVersion/FASTCLOUD/Resources/FinalLogo.png");
         ImageView logo = new ImageView(logoImage);
         //logo.setFitWidth(260);
         logo.setPreserveRatio(true);
@@ -210,6 +208,10 @@ logo.setCacheHint(CacheHint.SPEED);
         stage.show();
     }
 
+    public static void main(String[] args) {
+        launch(args);
+    }
+
     private void handleLogin(Stage stage, StackPane root, String username, String password) {
         if (username.isEmpty() || password.isEmpty()) {
             return;
@@ -252,184 +254,9 @@ logo.setCacheHint(CacheHint.SPEED);
         sequence.play();
     }
 
-    private void showDashboard(Stage stage) {
-        // ===== DASHBOARD =====
-        BorderPane dashRoot = new BorderPane();
-        dashRoot.setStyle("-fx-background-color: linear-gradient(to bottom right,#0a1a2e,#162a4a);");
-
-        // --- LEFT NAV ---
-        VBox leftNav = new VBox(16);
-        leftNav.setPadding(new Insets(18));
-        leftNav.setPrefWidth(220);
-        leftNav.setStyle("-fx-background-color: rgba(10,20,35,0.12); -fx-border-color: rgba(0,200,255,0.06);");
-       //-------------Logo in Dashboard----------------
-     Image LogoImage = new Image("file:/home/rafay/FASTCloud_AplhaVersion/FASTCLOUD/src/FinalLogo.png");
-       ImageView logo = new ImageView(LogoImage);
-      logo.setPreserveRatio(true);
-        logo.setSmooth(true);
-        logo.setCache(true);
-        logo.setEffect(new DropShadow(45, Color.rgb(0, 215, 255, 0.55)));
-         logo.setFitWidth(260);
-logo.setPreserveRatio(true);
-logo.setCache(true);
-logo.setCacheHint(CacheHint.SPEED);
-        
-        Button navDash = new Button("Dashboard");
-        Button navStorage = new Button("Data Storage");
-        Button navCompute = new Button("Compute");
-        Button navAnalytics = new Button("Analytics");
-
-        for (Button b : new Button[]{navDash, navStorage, navCompute, navAnalytics}) {
-            b.setMaxWidth(Double.MAX_VALUE);
-            b.setStyle("-fx-background-radius:12; -fx-background-color: transparent; -fx-text-fill:#BFEFFF; -fx-font-weight:600; -fx-padding:10 12;");
-            // interactive hover
-            DropShadow navShadow = new DropShadow(18, Color.web("#00D4FF"));
-            b.addEventHandler(MouseEvent.MOUSE_ENTERED, ev -> {
-                ScaleTransition s = new ScaleTransition(Duration.seconds(0.12), b);
-                s.setToX(1.03); s.setToY(1.03); s.play();
-                b.setEffect(navShadow);
-                b.setStyle("-fx-background-radius:12; -fx-background-color: rgba(0,212,255,0.06); -fx-text-fill:#001a2e; -fx-font-weight:700; -fx-padding:10 12;");
-            });
-            b.addEventHandler(MouseEvent.MOUSE_EXITED, ev -> {
-                ScaleTransition s2 = new ScaleTransition(Duration.seconds(0.1), b);
-                s2.setToX(1); s2.setToY(1); s2.play();
-                b.setEffect(null);
-                b.setStyle("-fx-background-radius:12; -fx-background-color: transparent; -fx-text-fill:#BFEFFF; -fx-font-weight:600; -fx-padding:10 12;");
-            });
-        }
-
-        leftNav.getChildren().addAll(logo , navDash, navStorage, navCompute, navAnalytics);
-
-        // --- CENTER: Charts and main content ---
-        VBox center = new VBox(18);
-        center.setPadding(new Insets(20, 28, 20, 28));
-
-        HBox headerRow = new HBox(12);
-        VBox titleBox = new VBox(4);
-        Label dashTitle = new Label(" FASTcloud ");
-        dashTitle.setFont(Font.font("Arial Bold", FontWeight.EXTRA_BOLD, 28));
-        dashTitle.setTextFill(Color.web("#00D4FF"));
-        Label dashSubtitle = new Label("Overview of system usage and health");
-        dashSubtitle.setTextFill(Color.web("#9FDFFF"));
-        titleBox.getChildren().addAll(dashTitle, dashSubtitle);
-        Region hdrSpacer = new Region();
-        HBox.setHgrow(hdrSpacer, Priority.ALWAYS);
-        headerRow.getChildren().addAll(titleBox, hdrSpacer);
-
-        
-      
-
-        
-        // Mid row: pie + active deployments
-        HBox midRow = new HBox(18);
-
-       
-
-        // Active deployments & progress
-        VBox rightCards = new VBox(12);
-        rightCards.setPrefWidth(360);
-        Label deploymentsTitle = new Label("Active Deployments");
-        deploymentsTitle.setFont(Font.font(16));
-        deploymentsTitle.setTextFill(Color.web("#BFEFFF"));
-
-        HBox deploy1 = new HBox(8);
-        Label d1 = new Label("E-commerce API");
-        d1.setTextFill(Color.web("#CFF8FF"));
-        ProgressBar p1 = new ProgressBar(0.65);
-        p1.setPrefWidth(180);
-        Label p1lbl = new Label("65%");
-        p1lbl.setTextFill(Color.web("#9FDFFF"));
-        deploy1.getChildren().addAll(d1, p1, p1lbl);
-
-        HBox deploy2 = new HBox(8);
-        Label d2 = new Label("Mobile Backend");
-        d2.setTextFill(Color.web("#CFF8FF"));
-        ProgressBar p2 = new ProgressBar(0.30);
-        p2.setPrefWidth(180);
-        Label p2lbl = new Label("30%");
-        p2lbl.setTextFill(Color.web("#9FDFFF"));
-        deploy2.getChildren().addAll(d2, p2, p2lbl);
-
-        rightCards.getChildren().addAll(deploymentsTitle, deploy1, deploy2);
-
-        midRow.getChildren().addAll( rightCards);
-
-        // animate pie and right cards
-        FadeTransition pieFade = new FadeTransition(Duration.seconds(0.9));
-        pieFade.setFromValue(0); pieFade.setToValue(1); pieFade.play();
-
-        FadeTransition rcFade = new FadeTransition(Duration.seconds(0.9), rightCards);
-        rcFade.setFromValue(0); rcFade.setToValue(1); rcFade.play();
-
-        // animate progress bars from 0 to target
-        Timeline p1Anim = new Timeline(new KeyFrame(Duration.seconds(0), new KeyValue(p1.progressProperty(), 0)),
-            new KeyFrame(Duration.seconds(1.2), new KeyValue(p1.progressProperty(), 0.65)));
-        p1Anim.play();
-
-        Timeline p2Anim = new Timeline(new KeyFrame(Duration.seconds(0), new KeyValue(p2.progressProperty(), 0)),
-            new KeyFrame(Duration.seconds(1.2), new KeyValue(p2.progressProperty(), 0.30)));
-        p2Anim.play();
-
-        // Activity feed
-        Label feedTitle = new Label("Recent Activity Feed");
-        feedTitle.setTextFill(Color.web("#BFEFFF"));
-        ListView<String> feed = new ListView<>(FXCollections.observableArrayList(
-            "16:08:22 - VM 'Tinderphp-Alpha' scaled up",
-            "14:05:23 - New bucket 'financial_Q4' completed",
-            "12:02:10 - User 'rafay' deployed API"
-        ));
-        feed.setPrefHeight(140);
-
-        // slide-in animation for feed
-        TranslateTransition feedIn = new TranslateTransition(Duration.seconds(0.7), feed);
-        feedIn.setFromX(80); feedIn.setToX(0); feedIn.play();
-
-        center.getChildren().addAll(headerRow, midRow, feedTitle, feed);
-
-        // --- RIGHT: summary panels ---
-        VBox right = new VBox(14);
-        right.setPadding(new Insets(18));
-        right.setPrefWidth(300);
-
-        Label costTitle = new Label("Cost Overview");
-        costTitle.setFont(Font.font(16));
-        costTitle.setTextFill(Color.web("#BFEFFF"));
-        Label costVal = new Label("$1,250.75");
-        costVal.setFont(Font.font("Arial Bold", 20));
-        costVal.setTextFill(Color.web("#7CFFC4"));
-
-        Label healthTitle = new Label("System Health");
-        healthTitle.setTextFill(Color.web("#BFEFFF"));
-        Label healthVal = new Label("All Systems Operational");
-        healthVal.setTextFill(Color.web("#9FDFFF"));
-
-        right.getChildren().addAll(costTitle, costVal, new Separator(), healthTitle, healthVal);
-
-        // Assemble
-        dashRoot.setLeft(leftNav);
-        dashRoot.setCenter(center);
-        dashRoot.setRight(right);
-
-        Scene dashScene = new Scene(dashRoot, 1200, 720);
-        stage.setScene(dashScene);
-
-        // Fade in animation
-        FadeTransition fadeIn = new FadeTransition(Duration.seconds(0.8), dashRoot);
-        fadeIn.setFromValue(0);
-        fadeIn.setToValue(1);
-        fadeIn.play();
-
-        // subtle periodic pulse on brand
-        ScaleTransition pulse = new ScaleTransition(Duration.seconds(2.8), leftNav);
-        pulse.setFromX(1); pulse.setFromY(1); pulse.setToX(1.02); pulse.setToY(1.02);
-        pulse.setAutoReverse(true); pulse.setCycleCount(Animation.INDEFINITE); pulse.play();
-
-        // make cards and nav more interactive: card hover
-    
-    }
-}  
- 
-
-  
-
-    
+private void showDashboard(Stage stage) {
+    DashboardView dashboard = new DashboardView(stage);
+    Scene dashScene = dashboard.createScene();
+    stage.setScene(dashScene);
+}
+}
