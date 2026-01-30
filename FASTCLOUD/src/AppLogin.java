@@ -112,13 +112,9 @@ logo.setCacheHint(CacheHint.SPEED);
                 "-fx-padding: 12 36;"
         );
 
-        loginBtn.setOnMouseEntered(e ->
-                loginBtn.setStyle("-fx-background-radius:26;-fx-background-color:linear-gradient(#00FFFF,#00B0FF);-fx-text-fill:#0a1a2e;-fx-font-weight:bold;-fx-padding:12 36;")
-        );
+        loginBtn.setOnMouseEntered(e ->loginBtn.setStyle("-fx-background-radius:26;-fx-background-color:linear-gradient(#00FFFF,#00B0FF);-fx-text-fill:#0a1a2e;-fx-font-weight:bold;-fx-padding:12 36;"));
 
-        loginBtn.setOnMouseExited(e ->
-                loginBtn.setStyle("-fx-background-radius:26;-fx-background-color:linear-gradient(#00D4FF,#0099FF);-fx-text-fill:white;-fx-font-weight:bold;-fx-padding:12 36;")
-        );
+        loginBtn.setOnMouseExited(e ->loginBtn.setStyle("-fx-background-radius:26;-fx-background-color:linear-gradient(#00D4FF,#0099FF);-fx-text-fill:white;-fx-font-weight:bold;-fx-padding:12 36;") );
 
         loginBtn.setOnMousePressed(e -> {
             loginBtn.setScaleX(.95);
