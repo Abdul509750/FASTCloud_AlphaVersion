@@ -1,0 +1,24 @@
+{
+    "java.project.sourcePaths": ["src"],
+    "java.project.outputPath": "bin",
+    "java.project.referencedLibraries": [
+        "lib/**/*.jar",
+        "/home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib/javafx.controls.jar",
+        "/home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib/javafx.fxml.jar",
+        "/home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib/jdk.jsobject.jar",
+        "/home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib/javafx.media.jar",
+        "/home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib/javafx.web.jar",
+        "/home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib/javafx-swt.jar",
+        "/home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib/javafx.base.jar",
+        "/home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib/jfx.incubator.input.jar",
+        "/home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib/javafx.graphics.jar",
+        "/home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib/jfx.incubator.richtext.jar",
+        "/home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib/javafx.swing.jar"
+    ],
+    "cSpell.words": [
+        "Aplha",
+        "dropshadow",
+        "FASTCLOUD",
+        "rafay"
+    ]
+}

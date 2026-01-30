@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+        "type": "java",
+        "name": "AppLogin",
+        "request": "launch",
+        "mainClass": "AppLogin",
+        "projectName": "FASTCLOUD_afe8ac93"
+    },
+    {
+        "type": "java",
+        "name": "Launch FASTcloud",
+        "request": "launch",
+        "mainClass": "AppLogin",
+        "vmArgs": "--module-path /home/rafay/Downloads/openjfx-25.0.2_linux-x64_bin-sdk/javafx-sdk-25.0.2/lib --add-modules javafx.controls,javafx.fxml"
+    }
+]
+}
