@@ -26,12 +26,6 @@ import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
 import javafx.scene.effect.Glow;
 import javafx.scene.input.MouseEvent;
-//import javafx.beans.property.DoubleProperty;
-import javafx.scene.chart.LineChart;
-import javafx.scene.chart.NumberAxis;
-import javafx.scene.chart.CategoryAxis;
-import javafx.scene.chart.XYChart;
-import javafx.scene.chart.PieChart;
 import javafx.scene.control.ListView;
 import javafx.scene.control.Separator;
 import javafx.collections.FXCollections;
@@ -268,11 +262,18 @@ logo.setCacheHint(CacheHint.SPEED);
         leftNav.setPadding(new Insets(18));
         leftNav.setPrefWidth(220);
         leftNav.setStyle("-fx-background-color: rgba(10,20,35,0.12); -fx-border-color: rgba(0,200,255,0.06);");
-
-        Label brand = new Label("SKYNET");
-        brand.setFont(Font.font("Arial Bold", 20));
-        brand.setTextFill(Color.web("#00D4FF"));
-
+       //-------------Logo in Dashboard----------------
+     Image LogoImage = new Image("file:/home/rafay/FASTCloud_AplhaVersion/FASTCLOUD/src/FinalLogo.png");
+       ImageView logo = new ImageView(LogoImage);
+      logo.setPreserveRatio(true);
+        logo.setSmooth(true);
+        logo.setCache(true);
+        logo.setEffect(new DropShadow(45, Color.rgb(0, 215, 255, 0.55)));
+         logo.setFitWidth(260);
+logo.setPreserveRatio(true);
+logo.setCache(true);
+logo.setCacheHint(CacheHint.SPEED);
+        
         Button navDash = new Button("Dashboard");
         Button navStorage = new Button("Data Storage");
         Button navCompute = new Button("Compute");
@@ -297,7 +298,7 @@ logo.setCacheHint(CacheHint.SPEED);
             });
         }
 
-        leftNav.getChildren().addAll(brand, navDash, navStorage, navCompute, navAnalytics);
+        leftNav.getChildren().addAll(logo , navDash, navStorage, navCompute, navAnalytics);
 
         // --- CENTER: Charts and main content ---
         VBox center = new VBox(18);
@@ -305,7 +306,7 @@ logo.setCacheHint(CacheHint.SPEED);
 
         HBox headerRow = new HBox(12);
         VBox titleBox = new VBox(4);
-        Label dashTitle = new Label("FASTcloud Dashboard");
+        Label dashTitle = new Label(" FASTcloud ");
         dashTitle.setFont(Font.font("Arial Bold", FontWeight.EXTRA_BOLD, 28));
         dashTitle.setTextFill(Color.web("#00D4FF"));
         Label dashSubtitle = new Label("Overview of system usage and health");
@@ -315,44 +316,14 @@ logo.setCacheHint(CacheHint.SPEED);
         HBox.setHgrow(hdrSpacer, Priority.ALWAYS);
         headerRow.getChildren().addAll(titleBox, hdrSpacer);
 
-        // CPU Line Chart
-        CategoryAxis xAxis = new CategoryAxis();
-        xAxis.setLabel("Time");
-        NumberAxis yAxis = new NumberAxis();
-        yAxis.setLabel("% CPU");
-        LineChart<String, Number> cpuChart = new LineChart<>(xAxis, yAxis);
-        cpuChart.setTitle("CPU Memory Usage");
-        cpuChart.setLegendVisible(false);
-        cpuChart.setCreateSymbols(false);
-        cpuChart.setPrefHeight(260);
+        
+      
 
-        XYChart.Series<String, Number> series = new XYChart.Series<>();
-        series.getData().add(new XYChart.Data<>("00:00", 20));
-        series.getData().add(new XYChart.Data<>("04:00", 35));
-        series.getData().add(new XYChart.Data<>("08:00", 28));
-        series.getData().add(new XYChart.Data<>("12:00", 48));
-        series.getData().add(new XYChart.Data<>("16:00", 30));
-        series.getData().add(new XYChart.Data<>("20:00", 42));
-        series.getData().add(new XYChart.Data<>("24:00", 33));
-        cpuChart.getData().add(series);
-
-        // animate cpu chart fade-in
-        FadeTransition cpuFade = new FadeTransition(Duration.seconds(0.9), cpuChart);
-        cpuFade.setFromValue(0);
-        cpuFade.setToValue(1);
-        cpuFade.play();
-
+        
         // Mid row: pie + active deployments
         HBox midRow = new HBox(18);
 
-        // Storage pie
-        PieChart storagePie = new PieChart(FXCollections.observableArrayList(
-            new PieChart.Data("Used", 75),
-            new PieChart.Data("Free", 25)
-        ));
-        storagePie.setTitle("Storage Utilization");
-        storagePie.setLabelsVisible(false);
-        storagePie.setPrefSize(320, 220);
+       
 
         // Active deployments & progress
         VBox rightCards = new VBox(12);
@@ -381,10 +352,10 @@ logo.setCacheHint(CacheHint.SPEED);
 
         rightCards.getChildren().addAll(deploymentsTitle, deploy1, deploy2);
 
-        midRow.getChildren().addAll(storagePie, rightCards);
+        midRow.getChildren().addAll( rightCards);
 
         // animate pie and right cards
-        FadeTransition pieFade = new FadeTransition(Duration.seconds(0.9), storagePie);
+        FadeTransition pieFade = new FadeTransition(Duration.seconds(0.9));
         pieFade.setFromValue(0); pieFade.setToValue(1); pieFade.play();
 
         FadeTransition rcFade = new FadeTransition(Duration.seconds(0.9), rightCards);
@@ -413,7 +384,7 @@ logo.setCacheHint(CacheHint.SPEED);
         TranslateTransition feedIn = new TranslateTransition(Duration.seconds(0.7), feed);
         feedIn.setFromX(80); feedIn.setToX(0); feedIn.play();
 
-        center.getChildren().addAll(headerRow, cpuChart, midRow, feedTitle, feed);
+        center.getChildren().addAll(headerRow, midRow, feedTitle, feed);
 
         // --- RIGHT: summary panels ---
         VBox right = new VBox(14);
@@ -449,26 +420,16 @@ logo.setCacheHint(CacheHint.SPEED);
         fadeIn.play();
 
         // subtle periodic pulse on brand
-        ScaleTransition pulse = new ScaleTransition(Duration.seconds(2.8), brand);
+        ScaleTransition pulse = new ScaleTransition(Duration.seconds(2.8), leftNav);
         pulse.setFromX(1); pulse.setFromY(1); pulse.setToX(1.02); pulse.setToY(1.02);
         pulse.setAutoReverse(true); pulse.setCycleCount(Animation.INDEFINITE); pulse.play();
 
         // make cards and nav more interactive: card hover
-        for (javafx.scene.Node n : new javafx.scene.Node[]{storagePie, cpuChart}) {
-            n.addEventHandler(MouseEvent.MOUSE_ENTERED, ev -> {
-                ScaleTransition s = new ScaleTransition(Duration.seconds(0.12), n);
-                s.setToX(1.02); s.setToY(1.02); s.play();
-            });
-            n.addEventHandler(MouseEvent.MOUSE_EXITED, ev -> {
-                ScaleTransition s2 = new ScaleTransition(Duration.seconds(0.1), n);
-                s2.setToX(1); s2.setToY(1); s2.play();
-            });
-        }
     
     }
 }  
  
 
-   private Class LeaderBoard extends 
+  
 
     
