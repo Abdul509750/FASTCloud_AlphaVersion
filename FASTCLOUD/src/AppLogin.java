@@ -464,35 +464,11 @@ logo.setCacheHint(CacheHint.SPEED);
                 s2.setToX(1); s2.setToY(1); s2.play();
             });
         }
+    
     }
+}  
+ 
 
-    private VBox createDashCard(String title, String description) {
-        VBox card = new VBox(10);
-        card.setStyle(
-                "-fx-background-radius: 20;" +
-                "-fx-background-color: linear-gradient(to bottom right, rgba(0,212,255,0.2), rgba(0,150,255,0.1));" +
-                "-fx-border-color: rgba(0,212,255,0.5);" +
-                "-fx-border-radius: 20;" +
-                "-fx-padding: 30; -fx-min-width: 180; -fx-pref-height: 150;"
-        );
-        card.setEffect(new DropShadow(30, Color.rgb(0, 212, 255, 0.4)));
-        card.setAlignment(Pos.CENTER);
+   private Class LeaderBoard extends 
 
-        Label cardTitle = new Label(title);
-        cardTitle.setFont(new Font("Arial Bold", 20));
-        cardTitle.setTextFill(Color.web("#00D4FF"));
-
-        Label cardDesc = new Label(description);
-        cardDesc.setFont(new Font("Arial", 12));
-        cardDesc.setTextFill(Color.web("#00BFFF"));
-        cardDesc.setWrapText(true);
-
-        card.getChildren().addAll(cardTitle, cardDesc);
-        return card;
-    }
-
-    public static void main(String[] args) {
-        launch(args);
-    }
-}
-
+    
