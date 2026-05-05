@@ -62,13 +62,15 @@ public class BotService {
             // 4. Save in Firestore bots/{uid}
             BotPersona bot = new BotPersona(uid, name, topic, style, intervalMins);
             String botDoc = "{\"fields\":{"
-                + "\"name\":{\"stringValue\":\"" + name + "\"},"
-                + "\"topic\":{\"stringValue\":\"" + topic + "\"},"
-                + "\"style\":{\"stringValue\":\"" + style + "\"},"
+                + "\"name\":" + sv(name) + ","
+                + "\"topic\":" + sv(topic) + ","
+                + "\"style\":" + sv(style) + ","
                 + "\"intervalMins\":{\"integerValue\":\"" + intervalMins + "\"},"
                 + "\"status\":{\"stringValue\":\"ACTIVE\"},"
                 + "\"lastRun\":{\"integerValue\":\"0\"},"
-                + "\"articleCount\":{\"integerValue\":\"0\"}"
+                + "\"articleCount\":{\"integerValue\":\"0\"},"
+                + "\"flagged\":{\"booleanValue\":false},"
+                + "\"flagReason\":" + sv("")
                 + "}}";
             HttpRequest botReq = HttpRequest.newBuilder()
                 .uri(URI.create(BOTS_URL + "/" + uid))
@@ -121,6 +123,69 @@ public class BotService {
         } catch (Exception e) { return false; }
     }
 
+    public boolean updateBotFlag(String botId, boolean flagged, String reason) {
+        try {
+            String url = BOTS_URL + "/" + botId
+                + "?updateMask.fieldPaths=flagged&updateMask.fieldPaths=flagReason";
+            String body = "{\"fields\":{"
+                + "\"flagged\":{\"booleanValue\":" + flagged + "},"
+                + "\"flagReason\":" + sv(flagged ? reason : "")
+                + "}}";
+            HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+                .build();
+            HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() != 200) {
+                System.out.println("[BotService] Flag update failed: " + res.body());
+            }
+            return res.statusCode() == 200;
+        } catch (Exception e) {
+            System.out.println("[BotService] Flag update error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean deleteBot(String botId) {
+        try {
+            HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(BOTS_URL + "/" + botId))
+                .DELETE()
+                .build();
+            HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() != 200) {
+                System.out.println("[BotService] Delete failed: " + res.body());
+            }
+            return res.statusCode() == 200;
+        } catch (Exception e) {
+            System.out.println("[BotService] Delete error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean updateBotArticleCount(String botId, int newCount) {
+        try {
+            String url = BOTS_URL + "/" + botId + "?updateMask.fieldPaths=articleCount";
+            String body = "{\"fields\":{"
+                + "\"articleCount\":{\"integerValue\":\"" + Math.max(0, newCount) + "\"}"
+                + "}}";
+            HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+                .build();
+            HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() != 200) {
+                System.out.println("[BotService] Article count update failed: " + res.body());
+            }
+            return res.statusCode() == 200;
+        } catch (Exception e) {
+            System.out.println("[BotService] Article count update error: " + e.getMessage());
+            return false;
+        }
+    }
+
     // =========================================================================
     //  Update bot lastRun + articleCount
     // =========================================================================
@@ -145,59 +210,100 @@ public class BotService {
     //  Helpers
     // =========================================================================
     private void parseBots(String json, List<BotPersona> list) {
-        String[] docs = json.split("\"name\":");
-        for (int i = 1; i < docs.length; i++) {
+        int docStart = findNextBotDocument(json, 0);
+        while (docStart != -1) {
             try {
-                String block  = docs[i];
-                String namePart = block.substring(1, block.indexOf("\"", 1));
-                String id     = namePart.substring(namePart.lastIndexOf("/") + 1);
+                int docPathStart = json.indexOf(":", docStart) + 1;
+                docPathStart = skipWhitespace(json, docPathStart);
+                if (docPathStart >= json.length() || json.charAt(docPathStart) != '"') {
+                    docStart = findNextBotDocument(json, docStart + 1);
+                    continue;
+                }
+
+                String docPath = readJsonString(json, docPathStart + 1);
+                int docPathEnd = findStringEnd(json, docPathStart + 1);
+                int nextDoc = findNextBotDocument(json, docPathEnd + 1);
+                String block = json.substring(docStart, nextDoc == -1 ? json.length() : nextDoc);
+
+                String id     = docPath.substring(docPath.lastIndexOf("/") + 1);
                 String name   = extractField(block, "name");
                 String topic  = extractField(block, "topic");
                 String style  = extractField(block, "style");
                 String status = extractField(block, "status");
                 int    mins   = parseInt(block, "intervalMins");
                 int    count  = parseInt(block, "articleCount");
+                boolean flagged = parseBoolean(block, "flagged");
+                String flagReason = extractField(block, "flagReason");
+
+                if (name.isBlank() || topic.isBlank()) {
+                    docStart = nextDoc;
+                    continue;
+                }
+                if (status.isBlank()) status = "PAUSED";
+                if (mins <= 0) mins = 1;
+
                 BotPersona bp = new BotPersona(id, name, topic, style, mins);
                 bp.setStatus(status);
                 bp.setArticleCount(count);
+                bp.setFlagged(flagged);
+                bp.setFlagReason(flagReason);
                 list.add(bp);
             } catch (Exception ignored) {}
+            docStart = findNextBotDocument(json, docStart + 1);
         }
     }
 
     private String extractField(String block, String key) {
-        String[] searches = {
-            "\"" + key + "\":{\"stringValue\":\"",
-            "\"" + key + "\": {\"stringValue\": \""
-        };
-        for (String s : searches) {
-            int start = block.indexOf(s);
-            if (start != -1) {
-                start += s.length();
-                int end = block.indexOf("\"", start);
-                if (end != -1) return block.substring(start, end);
-            }
-        }
-        return "";
+        int fieldStart = findFirestoreField(block, key);
+        if (fieldStart == -1) return "";
+        int valueKey = block.indexOf("\"stringValue\"", fieldStart);
+        if (valueKey == -1) return "";
+        int colon = block.indexOf(":", valueKey);
+        if (colon == -1) return "";
+        int valueStart = skipWhitespace(block, colon + 1);
+        if (valueStart >= block.length() || block.charAt(valueStart) != '"') return "";
+        String value = readJsonString(block, valueStart + 1);
+        return value == null ? "" : value;
     }
 
     private int parseInt(String block, String key) {
-        String[] searches = {
-            "\"" + key + "\":{\"integerValue\":\"",
-            "\"" + key + "\": {\"integerValue\": \""
-        };
-        for (String s : searches) {
-            int start = block.indexOf(s);
-            if (start != -1) {
-                start += s.length();
-                int end = block.indexOf("\"", start);
-                if (end != -1) {
-                    try { return Integer.parseInt(block.substring(start, end)); }
-                    catch (NumberFormatException ignored) {}
-                }
-            }
+        int fieldStart = findFirestoreField(block, key);
+        if (fieldStart == -1) return 0;
+        int valueKey = block.indexOf("\"integerValue\"", fieldStart);
+        if (valueKey == -1) return 0;
+        int colon = block.indexOf(":", valueKey);
+        if (colon == -1) return 0;
+        int valueStart = skipWhitespace(block, colon + 1);
+        if (valueStart >= block.length() || block.charAt(valueStart) != '"') return 0;
+        String value = readJsonString(block, valueStart + 1);
+        try { return value == null ? 0 : Integer.parseInt(value); }
+        catch (NumberFormatException ignored) { return 0; }
+    }
+
+    private boolean parseBoolean(String block, String key) {
+        int fieldStart = findFirestoreField(block, key);
+        if (fieldStart == -1) return false;
+        int valueKey = block.indexOf("\"booleanValue\"", fieldStart);
+        if (valueKey == -1) return false;
+        int colon = block.indexOf(":", valueKey);
+        if (colon == -1) return false;
+        int valueStart = skipWhitespace(block, colon + 1);
+        return block.startsWith("true", valueStart);
+    }
+
+    private int findFirestoreField(String block, String key) {
+        int pos = 0;
+        String needle = "\"" + key + "\"";
+        while (pos >= 0 && pos < block.length()) {
+            int fieldStart = block.indexOf(needle, pos);
+            if (fieldStart == -1) return -1;
+            int colon = block.indexOf(":", fieldStart);
+            if (colon == -1) return -1;
+            int valueStart = skipWhitespace(block, colon + 1);
+            if (valueStart < block.length() && block.charAt(valueStart) == '{') return fieldStart;
+            pos = fieldStart + needle.length();
         }
-        return 0;
+        return -1;
     }
 
     private String extractJson(String json, String key) {
@@ -214,5 +320,66 @@ public class BotService {
             }
         }
         return null;
+    }
+
+    private int findNextBotDocument(String json, int from) {
+        int pos = from;
+        while (pos >= 0 && pos < json.length()) {
+            int nameKey = json.indexOf("\"name\"", pos);
+            if (nameKey == -1) return -1;
+            int colon = json.indexOf(":", nameKey);
+            if (colon == -1) return -1;
+            int valueStart = skipWhitespace(json, colon + 1);
+            if (valueStart < json.length() && json.charAt(valueStart) == '"') {
+                String value = readJsonString(json, valueStart + 1);
+                if (value != null && value.contains("/documents/bots/")) return nameKey;
+            }
+            pos = nameKey + 6;
+        }
+        return -1;
+    }
+
+    private int skipWhitespace(String s, int index) {
+        while (index < s.length() && Character.isWhitespace(s.charAt(index))) index++;
+        return index;
+    }
+
+    private int findStringEnd(String json, int start) {
+        for (int i = start; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (c == '\\') i++;
+            else if (c == '"') return i;
+        }
+        return json.length() - 1;
+    }
+
+    private String readJsonString(String json, int start) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = start; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (c == '\\' && i + 1 < json.length()) {
+                char next = json.charAt(i + 1);
+                if (next == 'n')       { sb.append('\n'); i++; }
+                else if (next == 'r')  { i++; }
+                else if (next == 't')  { sb.append('\t'); i++; }
+                else if (next == '"')  { sb.append('"');  i++; }
+                else if (next == '\\') { sb.append('\\'); i++; }
+                else sb.append(next);
+            } else if (c == '"') {
+                return sb.toString();
+            } else {
+                sb.append(c);
+            }
+        }
+        return null;
+    }
+
+    private String sv(String val) {
+        String safe = val == null ? "" : val
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "");
+        return "{\"stringValue\":\"" + safe + "\"}";
     }
 }

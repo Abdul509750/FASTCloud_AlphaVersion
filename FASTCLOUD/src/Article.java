@@ -7,6 +7,9 @@ public class Article {
     private String topic;
     private String status; // DRAFT, AUTHENTICATED, PUBLISHED
     private long   createdAt;
+    private int    ratingSum;
+    private int    ratingCount;
+    private int    reportCount;
 
     public Article() {}
 
@@ -21,6 +24,9 @@ public class Article {
         this.topic     = topic;
         this.status    = status;
         this.createdAt = createdAt;
+        this.ratingSum = 0;
+        this.ratingCount = 0;
+        this.reportCount = 0;
     }
 
     public String getId()        { return id; }
@@ -31,9 +37,18 @@ public class Article {
     public String getTopic()     { return topic; }
     public String getStatus()    { return status; }
     public long   getCreatedAt() { return createdAt; }
+    public int    getRatingSum() { return ratingSum; }
+    public int    getRatingCount() { return ratingCount; }
+    public int    getReportCount() { return reportCount; }
+    public double getAverageRating() {
+        return ratingCount == 0 ? 0.0 : ratingSum / (double) ratingCount;
+    }
 
     public void setId(String id)           { this.id = id; }
     public void setTitle(String title)     { this.title = title; }
     public void setContent(String content) { this.content = content; }
     public void setStatus(String status)   { this.status = status; }
+    public void setRatingSum(int ratingSum) { this.ratingSum = ratingSum; }
+    public void setRatingCount(int ratingCount) { this.ratingCount = ratingCount; }
+    public void setReportCount(int reportCount) { this.reportCount = reportCount; }
 }

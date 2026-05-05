@@ -14,8 +14,8 @@ import javafx.util.Duration;
 import java.util.*;
 
 public class AdminDashboard {
-
-    // ── Palette ───────────────────────────────────────────────────────────────
+ 
+    // palette color combinitions
     private static final String BG     = "#060A12";
     private static final String CYAN   = "#06B6D4";
     private static final String BLUE   = "#3B82F6";
@@ -30,12 +30,12 @@ public class AdminDashboard {
     private static final String BRIGHT = "#F3F4F6";
     private static final String[] NC   = {CYAN, AMBER, BLT, PURP};
 
-    // ── Services ──────────────────────────────────────────────────────────────
+    // services by app
     private final BotService     botService     = new BotService();
     private final ArticleService articleService = new ArticleService();
     private final BotEngine      botEngine      = new BotEngine();
 
-    // ── State ─────────────────────────────────────────────────────────────────
+    // current active interface
     private User   user;
     private Stage  stage;
     private int    activeSec = 0;
@@ -67,7 +67,7 @@ public class AdminDashboard {
             articles.add(0, article);
             refreshArticlesPane();
             refreshStats();
-            showToast("📝 New article by " + bot.getName() + ": " + article.getTitle());
+            showToast(" New article by " + bot.getName() + ": " + article.getTitle());
         });
 
         // Load data in background
@@ -372,15 +372,18 @@ public class AdminDashboard {
             chip("Every " + bot.getIntervalMins() + " min", AMBER),
             chip(bot.getArticleCount() + " articles", BLT)
         );
+        if (bot.isFlagged()) {
+            meta.getChildren().add(chip("FLAGGED", RED));
+        }
         Text statusT = new Text(running ? "● RUNNING" : "◯ " + bot.getStatus());
         statusT.setFont(Font.font("System",FontWeight.BOLD,9));
-        statusT.setFill(Color.web(running ? GREEN : MID));
+        statusT.setFill(Color.web(bot.isFlagged() ? RED : running ? GREEN : MID));
         info.getChildren().addAll(nameT, meta, statusT);
 
         // Controls
         HBox controls = new HBox(8); controls.setAlignment(Pos.CENTER_RIGHT);
         if (running) {
-            Button pauseBtn = buildSmallBtn("⏸ PAUSE", AMBER);
+            Button pauseBtn = buildSmallBtn(" PAUSE", AMBER);
             pauseBtn.setOnAction(e -> {
                 botEngine.pauseBot(bot);
                 bot.setStatus("PAUSED");
@@ -388,7 +391,7 @@ public class AdminDashboard {
             });
             controls.getChildren().add(pauseBtn);
         } else {
-            Button resumeBtn = buildSmallBtn("▶ START", GREEN);
+            Button resumeBtn = buildSmallBtn(" START", GREEN);
             resumeBtn.setOnAction(e -> {
                 botEngine.resumeBot(bot);
                 bot.setStatus("ACTIVE");
@@ -397,11 +400,89 @@ public class AdminDashboard {
             controls.getChildren().add(resumeBtn);
         }
 
+        Button flagBtn = buildSmallBtn(bot.isFlagged() ? "UNFLAG" : "FLAG", bot.isFlagged() ? GREEN : RED);
+        flagBtn.setOnAction(e -> {
+            if (bot.isFlagged()) {
+                updateBotFlag(bot, false, "");
+            } else {
+                showFlagBotDialog(bot);
+            }
+        });
+
+        Button removeBtn = buildSmallBtn("REMOVE", RED);
+        removeBtn.setOnAction(e -> confirmRemoveBot(bot));
+        controls.getChildren().addAll(flagBtn, removeBtn);
+
         card.getChildren().addAll(dot, info, controls);
         return card;
     }
 
-    // ── Spawn Bot Dialog ──────────────────────────────────────────────────────
+    private void showFlagBotDialog(BotPersona bot) {
+        TextInputDialog dialog = new TextInputDialog("Reader reports require admin review.");
+        dialog.initOwner(stage);
+        dialog.setTitle("Flag Author");
+        dialog.setHeaderText("Flag " + bot.getName());
+        dialog.setContentText("Reason shown to readers:");
+        dialog.showAndWait().ifPresent(reason -> {
+            String cleanReason = reason == null || reason.trim().isEmpty()
+                ? "Flagged by admin for review."
+                : reason.trim();
+            updateBotFlag(bot, true, cleanReason);
+        });
+    }
+
+    private void updateBotFlag(BotPersona bot, boolean flagged, String reason) {
+        new Thread(() -> {
+            boolean ok = botService.updateBotFlag(bot.getId(), flagged, reason);
+            Platform.runLater(() -> {
+                if (ok) {
+                    bot.setFlagged(flagged);
+                    bot.setFlagReason(flagged ? reason : "");
+                    refreshBotsPane();
+                    showToast((flagged ? "Flagged " : "Unflagged ") + bot.getName());
+                } else {
+                    showToast("Could not update author flag.");
+                }
+            });
+        }).start();
+    }
+
+    private void confirmRemoveBot(BotPersona bot) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.initOwner(stage);
+        alert.setTitle("Remove Author Bot");
+        alert.setHeaderText("Remove " + bot.getName() + "?");
+        long ownedArticles = articles.stream().filter(a -> bot.getId().equals(a.getBotId())).count();
+        alert.setContentText("This removes the bot author and "
+            + ownedArticles + " article" + (ownedArticles == 1 ? "" : "s") + " written by this author.");
+        alert.showAndWait().ifPresent(choice -> {
+            if (choice != ButtonType.OK) return;
+            new Thread(() -> {
+                botEngine.pauseBot(bot);
+                boolean articlesOk = articleService.deleteArticlesByBot(bot.getId());
+                boolean botOk = articlesOk && botService.deleteBot(bot.getId());
+                Platform.runLater(() -> {
+                    if (botOk) {
+                        bots.removeIf(b -> bot.getId().equals(b.getId()));
+                        articles.removeIf(a -> bot.getId().equals(a.getBotId()));
+                        refreshBotsPane();
+                        refreshArticlesPane();
+                        refreshStats();
+                        showToast("Removed author bot and articles: " + bot.getName());
+                    } else if (articlesOk) {
+                        articles.removeIf(a -> bot.getId().equals(a.getBotId()));
+                        refreshArticlesPane();
+                        refreshStats();
+                        showToast("Removed author's articles, but could not remove author bot.");
+                    } else {
+                        showToast("Could not remove author's articles.");
+                    }
+                });
+            }).start();
+        });
+    }
+
+    // instance for Spawning the  Bot Dialog 
     private void showSpawnDialog() {
         Stage dialog = new Stage();
         dialog.initOwner(stage);
@@ -577,12 +658,29 @@ public class AdminDashboard {
             chipText("•", DIM),
             chipText(article.getTopic(), CYAN),
             chipText("•", DIM),
-            chipText(article.getStatus(), statusColor)
+            chipText(article.getStatus(), statusColor),
+            chipText("•", DIM),
+            chipText(article.getRatingCount() == 0
+                ? "No ratings"
+                : String.format("%.1f ★ (%d)", article.getAverageRating(), article.getRatingCount()), AMBER),
+            chipText("•", DIM),
+            chipText(article.getReportCount() + " reports", article.getReportCount() > 0 ? RED : MID)
         );
         info.getChildren().addAll(titleT, meta);
 
         // Action buttons based on status
         HBox actions = new HBox(8); actions.setAlignment(Pos.CENTER_RIGHT);
+        Button flagAuthorBtn = buildSmallBtn("FLAG AUTHOR", RED);
+        flagAuthorBtn.setOnAction(e -> {
+            BotPersona author = findBotById(article.getBotId());
+            if (author == null) {
+                showToast("Author bot is not loaded or was removed.");
+            } else {
+                showFlagBotDialog(author);
+            }
+        });
+        Button removeArticleBtn = buildSmallBtn("REMOVE", RED);
+        removeArticleBtn.setOnAction(e -> confirmRemoveArticle(article));
         if ("DRAFT".equals(article.getStatus())) {
             Button previewBtn    = buildSmallBtn("👁 VIEW",         BLT);
             Button authenticateBtn = buildSmallBtn("✓ AUTHENTICATE", GREEN);
@@ -595,7 +693,7 @@ public class AdminDashboard {
                     });
                 }).start();
             });
-            actions.getChildren().addAll(previewBtn, authenticateBtn);
+            actions.getChildren().addAll(previewBtn, authenticateBtn, flagAuthorBtn, removeArticleBtn);
         } else if ("AUTHENTICATED".equals(article.getStatus())) {
             Button previewBtn  = buildSmallBtn("👁 VIEW",    BLT);
             Button publishBtn  = buildSmallBtn("🚀 PUBLISH", CYAN);
@@ -609,18 +707,55 @@ public class AdminDashboard {
                     });
                 }).start();
             });
-            actions.getChildren().addAll(previewBtn, publishBtn);
+            actions.getChildren().addAll(previewBtn, publishBtn, flagAuthorBtn, removeArticleBtn);
         } else {
             Button viewBtn = buildSmallBtn("👁 VIEW", BLT);
             viewBtn.setOnAction(e -> showArticlePreview(article));
-            actions.getChildren().add(viewBtn);
+            actions.getChildren().addAll(viewBtn, flagAuthorBtn, removeArticleBtn);
         }
 
         row.getChildren().addAll(accent, info, actions);
         return row;
     }
 
-    // ── Article Preview Dialog ────────────────────────────────────────────────
+    private void confirmRemoveArticle(Article article) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.initOwner(stage);
+        alert.setTitle("Remove Article");
+        alert.setHeaderText("Remove " + article.getTitle() + "?");
+        alert.setContentText("This permanently removes the article from Firestore.");
+        alert.showAndWait().ifPresent(choice -> {
+            if (choice != ButtonType.OK) return;
+            BotPersona author = findBotById(article.getBotId());
+            int newCount = author == null ? 0 : Math.max(0, author.getArticleCount() - 1);
+            new Thread(() -> {
+                boolean ok = articleService.deleteArticle(article.getId());
+                if (ok && author != null) botService.updateBotArticleCount(author.getId(), newCount);
+                Platform.runLater(() -> {
+                    if (ok) {
+                        articles.removeIf(a -> article.getId().equals(a.getId()));
+                        if (author != null) author.setArticleCount(newCount);
+                        refreshArticlesPane();
+                        refreshBotsPane();
+                        refreshStats();
+                        showToast("Removed article: " + article.getTitle());
+                    } else {
+                        showToast("Could not remove article.");
+                    }
+                });
+            }).start();
+        });
+    }
+
+    private BotPersona findBotById(String botId) {
+        if (botId == null) return null;
+        for (BotPersona bot : bots) {
+            if (botId.equals(bot.getId())) return bot;
+        }
+        return null;
+    }
+
+    // Article Preview Dialog 
     private void showArticlePreview(Article article) {
         Stage dialog = new Stage();
         dialog.initOwner(stage);
@@ -730,6 +865,7 @@ public class AdminDashboard {
         return sp;
     }
 
+        // updation of the user name
     private boolean updateUsernameInFirestore(String newName) {
         try {
             String url  = "https://firestore.googleapis.com/v1/projects/aqalnama-9d5f2"

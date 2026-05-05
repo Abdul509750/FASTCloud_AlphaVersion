@@ -16,7 +16,7 @@ import javafx.util.Duration;
 
 public class AppRegister extends Application {
 
-    // ── Palette (mirrors AppLogin exactly) ────────────────────────────────────
+    // colors combination directly copy from that of the app login 
     private static final String DEEP_SPACE  = "#060A12";
     private static final String BLUE_CORE   = "#3B82F6";
     private static final String BLUE_BRIGHT = "#60A5FA";
@@ -25,11 +25,11 @@ public class AppRegister extends Application {
     private static final String ERROR_COL   = "#F87171";
     private static final String SUCCESS_COL = "#22C55E";
 
-    // ── Firebase services ─────────────────────────────────────────────────────
+    //  Firebase services 
     private final FirebaseAuthService authService      = new FirebaseAuthService();
     private final FirestoreService    firestoreService = new FirestoreService();
 
-    // ── UI refs ───────────────────────────────────────────────────────────────
+   // gui references
     private Button            registerBtn;
     private Label             statusLabel;
     private ProgressIndicator spinner;
@@ -39,7 +39,7 @@ public class AppRegister extends Application {
     private PasswordField     confirmPassField;
     private ComboBox<String>  roleCombo;
 
-    // ── Called by AppLogin to reuse the same stage ────────────────────────────
+    // used/called by AppLogin to reuse the same stage
     public void showOn(Stage stage) {
         StackPane root = new StackPane();
         root.setStyle("-fx-background-color: " + DEEP_SPACE + ";");

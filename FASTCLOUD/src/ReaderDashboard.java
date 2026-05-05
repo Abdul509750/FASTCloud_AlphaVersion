@@ -1,4 +1,5 @@
 import javafx.animation.*;
+import javafx.application.Platform;
 import javafx.geometry.*;
 import javafx.scene.*;
 import javafx.scene.canvas.*;
@@ -14,7 +15,7 @@ import java.util.*;
 
 public class ReaderDashboard {
 
-    // ── Palette ───────────────────────────────────────────────────────────────
+ // pallete of the color combinition 
     private static final String BG     = "#060A12";
     private static final String CYAN   = "#06B6D4";
     private static final String TEAL   = "#2DD4BF";
@@ -30,20 +31,22 @@ public class ReaderDashboard {
     private static final String BRIGHT = "#F3F4F6";
     private static final String[] NC   = {CYAN, BLT, PURP};
 
-    // ── Article data ──────────────────────────────────────────────────────────
-    private static final Object[][] ART = {
-        {"Quantum Entanglement & Information Theory",  "Neural Engine α", "Physics",    "14 min", CYAN},
-        {"The Consciousness Problem in 2025",          "SynapseBot v2",   "Philosophy", "9 min",  PURP},
-        {"CRISPR Gene Editing: Rewriting Human DNA",   "BioCore Prime",   "Biology",    "11 min", GREEN},
-        {"Dark Matter: String Theory Predictions",     "AstroBot Ω",      "Cosmology",  "16 min", AMBER},
-        {"Ancient Sumerian Civilization Reexamined",   "HistoBot λ",      "History",    "8 min",  RED},
-        {"General Relativity & Black Hole Paradoxes",  "Neural Engine β", "Physics",    "19 min", CYAN},
-    };
+    //  Article data 
+    private final ArticleService articleService = new ArticleService();
+    private final BotService     botService     = new BotService();
+    private final List<Article>  publishedArticles = new ArrayList<>();
+    private final Map<String, BotPersona> authorsById = new HashMap<>();
 
-    // ── State ─────────────────────────────────────────────────────────────────
+    //Current state
     private User       user;
     private ScrollPane homeSection, searchSection, profileSection;
     private int        activeSec = 0;
+    private GridPane   articleGrid;
+    private VBox       searchResults;
+    private Label      resultCountLabel;
+    private TextField  searchField;
+    private Text       feedSubtitle;
+    private Text       publishedStatText;
 
     private final List<Rectangle> nBgs  = new ArrayList<>();
     private final List<Rectangle> nBars = new ArrayList<>();
@@ -51,18 +54,18 @@ public class ReaderDashboard {
     private final List<Text>      nIts  = new ArrayList<>();
     private final List<Text>      nMts  = new ArrayList<>();
 
-    // ── Particle state (reduced to 25) ────────────────────────────────────────
+    //--------- Particle state  
     private static final int P = 25;
     private final double[] pX = new double[P], pY = new double[P];
     private final double[] pVX= new double[P], pVY= new double[P];
     private final double[] pR = new double[P], pA = new double[P];
 
-    // ── Globe state ───────────────────────────────────────────────────────────
+    //  Globe state 
     private double   globeRotY = 0, globeOrb = 0;
     private double[] sinSeg, cosSeg;
     private static final int SEGS = 34;
 
-    // ── Pre-cached colors ─────────────────────────────────────────────────────
+    //  Pre-cached colors for faster access
     private static final int     CS = 32;
     private static final Color[] C_CYAN = new Color[CS];
     private static final Color[] C_TEAL = new Color[CS];
@@ -78,7 +81,7 @@ public class ReaderDashboard {
     private static Color cC(double a) { return C_CYAN[Math.max(0,Math.min(CS-1,(int)(a*(CS-1))))]; }
     private static Color cT(double a) { return C_TEAL[Math.max(0,Math.min(CS-1,(int)(a*(CS-1))))]; }
 
-    // ── Master timer (throttled to ~20fps for canvas) ─────────────────────────
+    //  Master timer (throttled to ~20fps for canvas) 
     private AnimationTimer masterTimer;
     private long           lastNs = 0;
     private static final long FRAME_NS = 50_000_000L; // 20fps
@@ -131,6 +134,24 @@ public class ReaderDashboard {
         FadeTransition ft = new FadeTransition(Duration.millis(800), main);
         ft.setToValue(1.0);
         ft.play();
+
+        loadPublishedArticles();
+    }
+
+    private void loadPublishedArticles() {
+        new Thread(() -> {
+            List<Article> fresh = articleService.getPublishedArticles();
+            List<BotPersona> authors = botService.getAllBots();
+            Platform.runLater(() -> {
+                publishedArticles.clear();
+                publishedArticles.addAll(fresh);
+                authorsById.clear();
+                for (BotPersona author : authors) authorsById.put(author.getId(), author);
+                refreshArticleGrid();
+                refreshSearchResults();
+                updateArticleStats();
+            });
+        }).start();
     }
 
     // =========================================================================
@@ -151,7 +172,7 @@ public class ReaderDashboard {
     }
 
     // =========================================================================
-    //  SIDEBAR — no mini globe, replaced with decorative element
+    //  SIDEBAR  
     // =========================================================================
     private VBox buildSidebar(Stage stage) {
         VBox sb = new VBox(0);
@@ -411,43 +432,29 @@ public class ReaderDashboard {
         VBox feedTitle = new VBox(3);
         Text ft1 = new Text("KNOWLEDGE FEED");
         ft1.setFont(Font.font("System", FontWeight.BLACK, 17)); ft1.setFill(Color.web(BRIGHT));
-        Text ft2 = new Text("AI-authored articles verified by system administrators");
-        ft2.setFont(Font.font("System", 12)); ft2.setFill(Color.web(MID));
-        feedTitle.getChildren().addAll(ft1, ft2);
+        feedSubtitle = new Text("Loading published articles...");
+        feedSubtitle.setFont(Font.font("System", 12)); feedSubtitle.setFill(Color.web(MID));
+        feedTitle.getChildren().addAll(ft1, feedSubtitle);
         Region fhSp = new Region(); HBox.setHgrow(fhSp, Priority.ALWAYS);
-        HBox filters = new HBox(8); filters.setAlignment(Pos.CENTER_RIGHT);
-        String[] fLabels = {"All","Physics","Biology","History"};
-        for (int i = 0; i < fLabels.length; i++) {
-            boolean sel = i == 0;
-            Label f = new Label(fLabels[i]);
-            f.setFont(Font.font("System", FontWeight.BOLD, 10));
-            f.setPadding(new Insets(5,13,5,13)); f.setCursor(javafx.scene.Cursor.HAND);
-            f.setTextFill(Color.web(sel ? CYAN : LIGHT));
-            f.setStyle(
-                "-fx-background-color:"+(sel?"rgba(6,182,212,0.18)":"rgba(255,255,255,0.04)")+";"+
-                "-fx-border-color:"    +(sel?"rgba(6,182,212,0.55)":"rgba(255,255,255,0.08)")+";"+
-                "-fx-border-width:1;-fx-border-radius:20;-fx-background-radius:20;"
-            );
-            filters.getChildren().add(f);
-        }
-        feedHdr.getChildren().addAll(feedTitle, fhSp, filters);
+        Button refreshBtn = new Button("REFRESH");
+        refreshBtn.setFont(Font.font("System", FontWeight.BOLD, 10));
+        refreshBtn.setPadding(new Insets(6,14,6,14));
+        refreshBtn.setCursor(javafx.scene.Cursor.HAND);
+        refreshBtn.setTextFill(Color.web(CYAN));
+        refreshBtn.setStyle(
+            "-fx-background-color:rgba(6,182,212,0.12);" +
+            "-fx-border-color:rgba(6,182,212,0.42);" +
+            "-fx-border-width:1;-fx-border-radius:20;-fx-background-radius:20;"
+        );
+        refreshBtn.setOnAction(e -> loadPublishedArticles());
+        feedHdr.getChildren().addAll(feedTitle, fhSp, refreshBtn);
         content.getChildren().add(feedHdr);
 
-        GridPane grid = new GridPane();
-        grid.setHgap(20); grid.setVgap(20);
-        grid.setPadding(new Insets(0,36,40,36));
-        for (int i = 0; i < ART.length; i++) {
-            StackPane card = buildArticleCard(ART[i]);
-            card.setOpacity(0); card.setTranslateY(16);
-            FadeTransition cft = new FadeTransition(Duration.millis(480), card);
-            cft.setDelay(Duration.millis(180 + i * 70)); cft.setToValue(1.0);
-            TranslateTransition ctt = new TranslateTransition(Duration.millis(480), card);
-            ctt.setDelay(Duration.millis(180 + i * 70)); ctt.setToY(0);
-            ctt.setInterpolator(Interpolator.EASE_OUT);
-            new ParallelTransition(cft, ctt).play();
-            grid.add(card, i % 3, i / 3);
-        }
-        content.getChildren().add(grid);
+        articleGrid = new GridPane();
+        articleGrid.setHgap(20); articleGrid.setVgap(20);
+        articleGrid.setPadding(new Insets(0,36,40,36));
+        content.getChildren().add(articleGrid);
+        refreshArticleGrid();
 
         ScrollPane sp = new ScrollPane(content);
         sp.setStyle("-fx-background-color:transparent;-fx-background:transparent;");
@@ -508,11 +515,13 @@ public class ReaderDashboard {
         lineGrow.setDelay(Duration.millis(500)); lineGrow.play();
 
         HBox heroStats = new HBox(32); heroStats.setAlignment(Pos.CENTER_LEFT);
-        String[][] hsd = {{"∞","Published\nArticles"},{"6","Active AI\nBots"},{"3","Access\nRoles"}};
-        for (String[] d : hsd) {
+        String[][] hsd = {{"0","Published\nArticles"},{"AI","Authored\nKnowledge"},{"3","Access\nRoles"}};
+        for (int i = 0; i < hsd.length; i++) {
+            String[] d = hsd[i];
             VBox sc = new VBox(2); sc.setAlignment(Pos.CENTER_LEFT);
             Text sv = new Text(d[0]); sv.setFont(Font.font("System",FontWeight.BLACK,32));
             sv.setFill(Color.web(CYAN)); sv.setEffect(new Glow(0.5));
+            if (i == 0) publishedStatText = sv;
             Text sl = new Text(d[1]); sl.setFont(Font.font("System",10)); sl.setFill(Color.web(MID));
             sc.getChildren().addAll(sv, sl); heroStats.getChildren().add(sc);
         }
@@ -533,12 +542,40 @@ public class ReaderDashboard {
         return hero;
     }
 
-    private StackPane buildArticleCard(Object[] data) {
-        String title  = (String) data[0];
-        String author = (String) data[1];
-        String cat    = (String) data[2];
-        String time   = (String) data[3];
-        String color  = (String) data[4];
+    private void refreshArticleGrid() {
+        if (articleGrid == null) return;
+        articleGrid.getChildren().clear();
+
+        if (publishedArticles.isEmpty()) {
+            Text empty = new Text("No published articles yet. Once admin publishes an authenticated draft, it will appear here.");
+            empty.setFont(Font.font("System", 14));
+            empty.setFill(Color.web(MID));
+            empty.setWrappingWidth(720);
+            articleGrid.add(empty, 0, 0);
+            return;
+        }
+
+        for (int i = 0; i < publishedArticles.size(); i++) {
+            StackPane card = buildArticleCard(publishedArticles.get(i));
+            card.setOpacity(0); card.setTranslateY(16);
+            FadeTransition cft = new FadeTransition(Duration.millis(480), card);
+            cft.setDelay(Duration.millis(80 + i * 45)); cft.setToValue(1.0);
+            TranslateTransition ctt = new TranslateTransition(Duration.millis(480), card);
+            ctt.setDelay(Duration.millis(80 + i * 45)); ctt.setToY(0);
+            ctt.setInterpolator(Interpolator.EASE_OUT);
+            new ParallelTransition(cft, ctt).play();
+            articleGrid.add(card, i % 3, i / 3);
+        }
+    }
+
+    private StackPane buildArticleCard(Article article) {
+        String title  = emptyTo(article.getTitle(), "Untitled Article");
+        String author = emptyTo(article.getBotName(), "Aqalnama Bot");
+        String cat    = emptyTo(article.getTopic(), "General");
+        String time   = estimateReadTime(article);
+        String color  = topicColor(cat);
+        BotPersona authorBot = authorsById.get(article.getBotId());
+        boolean flaggedAuthor = authorBot != null && authorBot.isFlagged();
 
         VBox inner = new VBox(0);
         inner.setPrefWidth(298); inner.setMinWidth(280);
@@ -570,15 +607,24 @@ public class ReaderDashboard {
         Circle authDot = new Circle(4, Color.web(color)); authDot.setEffect(new Glow(0.6));
         VBox authInfo = new VBox(0);
         Text authT = new Text(author); authT.setFont(Font.font("System",FontWeight.BOLD,10)); authT.setFill(Color.web(LIGHT));
-        Text authSub = new Text("AI Author  •  Verified ✓"); authSub.setFont(Font.font("System",8)); authSub.setFill(Color.web(DIM));
+        Text authSub = new Text(flaggedAuthor ? "AI Author  •  Flagged for review" : "AI Author  •  Verified ✓");
+        authSub.setFont(Font.font("System",8)); authSub.setFill(Color.web(flaggedAuthor ? RED : DIM));
         authInfo.getChildren().addAll(authT, authSub);
         Region asp = new Region(); HBox.setHgrow(asp, Priority.ALWAYS);
         Text readArr = new Text("READ →"); readArr.setFont(Font.font("System",FontWeight.BOLD,10)); readArr.setFill(Color.web(color));
         authRow.getChildren().addAll(authDot, authInfo, asp, readArr);
         cardContent.getChildren().addAll(metaRow, titleT, authRow);
+        if (flaggedAuthor) {
+            Label flagL = new Label("AUTHOR FLAGGED");
+            flagL.setFont(Font.font("System", FontWeight.BOLD, 8));
+            flagL.setTextFill(Color.web(RED));
+            flagL.setPadding(new Insets(3, 8, 3, 8));
+            flagL.setStyle("-fx-background-color:rgba(248,113,113,0.12);-fx-border-color:rgba(248,113,113,0.45);-fx-border-width:1;-fx-border-radius:20;-fx-background-radius:20;");
+            cardContent.getChildren().add(flagL);
+        }
         inner.getChildren().addAll(topBar, cardContent);
 
-        Rectangle borderRect = new Rectangle(298, 116);
+        Rectangle borderRect = new Rectangle(298, flaggedAuthor ? 144 : 116);
         borderRect.setArcWidth(14); borderRect.setArcHeight(14);
         borderRect.setFill(Color.TRANSPARENT);
         borderRect.setStroke(Color.web(color, 0.18)); borderRect.setStrokeWidth(1);
@@ -602,6 +648,7 @@ public class ReaderDashboard {
             wrapper.setEffect(ds);
             borderRect.setStroke(Color.web(color, 0.18));
         });
+        wrapper.setOnMouseClicked(e -> showArticleReaderView(article));
 
         return wrapper;
     }
@@ -630,16 +677,17 @@ public class ReaderDashboard {
         sBg.setFill(Color.web("rgba(4,10,22,0.92)"));
         sBg.setStroke(Color.web(BLT,0.35)); sBg.setStrokeWidth(1.5);
         sBg.setEffect(new DropShadow(BlurType.GAUSSIAN, Color.web(BLT,0.2), 20, 0.1, 0, 0));
-        TextField sf = new TextField();
-        sf.setPromptText("  ◉  Search topics, authors, concepts...");
-        sf.setPrefWidth(780); sf.setPrefHeight(56);
-        sf.setStyle("-fx-background-color:transparent;-fx-text-fill:white;" +
+        searchField = new TextField();
+        searchField.setPromptText("  ◉  Search topics, authors, concepts...");
+        searchField.setPrefWidth(780); searchField.setPrefHeight(56);
+        searchField.setStyle("-fx-background-color:transparent;-fx-text-fill:white;" +
             "-fx-prompt-text-fill:#374151;-fx-font-size:14px;-fx-padding:0 20;");
-        sf.focusedProperty().addListener((o,ov,nv) -> {
+        searchField.focusedProperty().addListener((o,ov,nv) -> {
             if (nv) { sBg.setStroke(Color.web(CYAN,0.8)); sBg.setEffect(new DropShadow(BlurType.GAUSSIAN,Color.web(CYAN,0.4),28,0.2,0,0)); }
             else    { sBg.setStroke(Color.web(BLT,0.35));  sBg.setEffect(new DropShadow(BlurType.GAUSSIAN,Color.web(BLT,0.2),20,0.1,0,0)); }
         });
-        searchRow.getChildren().addAll(sBg, sf);
+        searchField.textProperty().addListener((obs, oldText, newText) -> refreshSearchResults());
+        searchRow.getChildren().addAll(sBg, searchField);
 
         HBox chips = new HBox(10);
         String[] sugg = {"Quantum Physics","Neuroscience","Black Holes","CRISPR","Ancient History","Consciousness"};
@@ -652,22 +700,22 @@ public class ReaderDashboard {
             chip.setStyle(base2);
             chip.setOnMouseEntered(ev -> chip.setStyle(hov2));
             chip.setOnMouseExited(ev  -> chip.setStyle(base2));
-            chip.setOnMouseClicked(ev -> sf.setText(s));
+            chip.setOnMouseClicked(ev -> searchField.setText(s));
             chips.getChildren().add(chip);
         }
 
         HBox resHdr = new HBox(10); resHdr.setAlignment(Pos.CENTER_LEFT);
         Text rhT = new Text("ALL ARTICLES"); rhT.setFont(Font.font("System",FontWeight.BOLD,10)); rhT.setFill(Color.web(MID));
-        Label countL = new Label(ART.length + " RESULTS");
-        countL.setFont(Font.font("System",FontWeight.BOLD,9)); countL.setTextFill(Color.web(CYAN));
-        countL.setPadding(new Insets(2,8,2,8));
-        countL.setStyle("-fx-background-color:rgba(6,182,212,0.12);-fx-border-color:rgba(6,182,212,0.35);-fx-border-width:1;-fx-border-radius:10;-fx-background-radius:10;");
-        resHdr.getChildren().addAll(rhT, countL);
+        resultCountLabel = new Label("0 RESULTS");
+        resultCountLabel.setFont(Font.font("System",FontWeight.BOLD,9)); resultCountLabel.setTextFill(Color.web(CYAN));
+        resultCountLabel.setPadding(new Insets(2,8,2,8));
+        resultCountLabel.setStyle("-fx-background-color:rgba(6,182,212,0.12);-fx-border-color:rgba(6,182,212,0.35);-fx-border-width:1;-fx-border-radius:10;-fx-background-radius:10;");
+        resHdr.getChildren().addAll(rhT, resultCountLabel);
 
-        VBox results = new VBox(10); results.setMaxWidth(780);
-        for (Object[] a : ART) results.getChildren().add(buildSearchRow(a));
+        searchResults = new VBox(10); searchResults.setMaxWidth(780);
+        refreshSearchResults();
 
-        content.getChildren().addAll(heading, searchRow, chips, resHdr, results);
+        content.getChildren().addAll(heading, searchRow, chips, resHdr, searchResults);
         ScrollPane sp = new ScrollPane(content);
         sp.setStyle("-fx-background-color:transparent;-fx-background:transparent;");
         sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
@@ -676,9 +724,41 @@ public class ReaderDashboard {
         return sp;
     }
 
-    private HBox buildSearchRow(Object[] data) {
-        String title = (String)data[0], author = (String)data[1];
-        String cat   = (String)data[2], time   = (String)data[3], color = (String)data[4];
+    private void refreshSearchResults() {
+        if (searchResults == null) return;
+        searchResults.getChildren().clear();
+
+        String query = searchField == null ? "" : searchField.getText().trim().toLowerCase();
+        int matches = 0;
+        for (Article article : publishedArticles) {
+            String haystack = (emptyTo(article.getTitle(), "") + " "
+                + emptyTo(article.getBotName(), "") + " "
+                + emptyTo(article.getTopic(), "") + " "
+                + emptyTo(article.getContent(), "")).toLowerCase();
+            if (!query.isEmpty() && !haystack.contains(query)) continue;
+            searchResults.getChildren().add(buildSearchRow(article));
+            matches++;
+        }
+
+        if (matches == 0) {
+            Text empty = new Text(query.isEmpty()
+                ? "No published articles available yet."
+                : "No published articles match your search.");
+            empty.setFont(Font.font("System", 13));
+            empty.setFill(Color.web(MID));
+            searchResults.getChildren().add(empty);
+        }
+        if (resultCountLabel != null) resultCountLabel.setText(matches + " RESULTS");
+    }
+
+    private HBox buildSearchRow(Article article) {
+        String title = emptyTo(article.getTitle(), "Untitled Article");
+        String author = emptyTo(article.getBotName(), "Aqalnama Bot");
+        String cat = emptyTo(article.getTopic(), "General");
+        String time = estimateReadTime(article);
+        String color = topicColor(cat);
+        BotPersona authorBot = authorsById.get(article.getBotId());
+        boolean flaggedAuthor = authorBot != null && authorBot.isFlagged();
         HBox row = new HBox(16); row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(14,18,14,18)); row.setCursor(javafx.scene.Cursor.HAND);
         String base3 = "-fx-background-color:rgba(6,12,26,0.85);-fx-background-radius:10;-fx-border-color:rgba(255,255,255,0.06);-fx-border-width:1;-fx-border-radius:10;";
@@ -693,14 +773,169 @@ public class ReaderDashboard {
         Text sep=new Text("•"); sep.setFill(Color.web(DIM));
         Text ct=new Text(cat); ct.setFont(Font.font("System",FontWeight.BOLD,10)); ct.setFill(Color.web(color));
         Text sep2=new Text("•"); sep2.setFill(Color.web(DIM));
-        Text tm=new Text(time); tm.setFont(Font.font("System",10)); tm.setFill(Color.web(DIM));
+        Text tm=new Text(flaggedAuthor ? time + " • AUTHOR FLAGGED" : time); tm.setFont(Font.font("System",10)); tm.setFill(Color.web(flaggedAuthor ? RED : DIM));
         meta.getChildren().addAll(at,sep,ct,sep2,tm);
         info.getChildren().addAll(t, meta);
         Text arrow = new Text("→"); arrow.setFont(Font.font("System",FontWeight.BOLD,16)); arrow.setFill(Color.web(color,0.7));
         row.getChildren().addAll(accent, info, arrow);
         row.setOnMouseEntered(e -> { row.setStyle(hov3);  arrow.setFill(Color.web(color)); });
         row.setOnMouseExited(e  -> { row.setStyle(base3); arrow.setFill(Color.web(color,0.7)); });
+        row.setOnMouseClicked(e -> showArticleReaderView(article));
         return row;
+    }
+
+    private void showArticleReaderView(Article article) {
+        Stage dialog = new Stage();
+        VBox root = new VBox(16);
+        root.setPadding(new Insets(32));
+        root.setStyle("-fx-background-color:#080E1A;");
+
+        String topic = emptyTo(article.getTopic(), "General");
+        String color = topicColor(topic);
+        BotPersona authorBot = authorsById.get(article.getBotId());
+        boolean flaggedAuthor = authorBot != null && authorBot.isFlagged();
+
+        Label topicBadge = new Label(topic.toUpperCase());
+        topicBadge.setFont(Font.font("System", FontWeight.BOLD, 9));
+        topicBadge.setTextFill(Color.web(color));
+        topicBadge.setPadding(new Insets(4, 10, 4, 10));
+        topicBadge.setStyle("-fx-background-color:" + color + "1A;-fx-border-color:" + color + "50;-fx-border-width:1;-fx-border-radius:20;-fx-background-radius:20;");
+
+        Text title = new Text(emptyTo(article.getTitle(), "Untitled Article"));
+        title.setFont(Font.font("System", FontWeight.BOLD, 24));
+        title.setFill(Color.web(BRIGHT));
+        title.setWrappingWidth(680);
+
+        HBox meta = new HBox(10);
+        meta.setAlignment(Pos.CENTER_LEFT);
+        Text author = new Text(emptyTo(article.getBotName(), "Aqalnama Bot"));
+        author.setFont(Font.font("System", FontWeight.BOLD, 11));
+        author.setFill(Color.web(LIGHT));
+        Text sep = new Text("•"); sep.setFill(Color.web(DIM));
+        Text readTime = new Text(estimateReadTime(article));
+        readTime.setFont(Font.font("System", 11));
+        readTime.setFill(Color.web(MID));
+        meta.getChildren().addAll(author, sep, readTime);
+
+        VBox moderationBox = new VBox(8);
+        if (flaggedAuthor) {
+            Text warning = new Text("Author flagged by admin: "
+                + emptyTo(authorBot.getFlagReason(), "This author is under review."));
+            warning.setFont(Font.font("System", FontWeight.BOLD, 12));
+            warning.setFill(Color.web(RED));
+            warning.setWrappingWidth(680);
+            moderationBox.getChildren().add(warning);
+        }
+
+        Text stats = new Text(ratingText(article) + "  •  " + article.getReportCount() + " reports");
+        stats.setFont(Font.font("System", FontWeight.BOLD, 11));
+        stats.setFill(Color.web(LIGHT));
+
+        HBox ratingRow = new HBox(8);
+        ratingRow.setAlignment(Pos.CENTER_LEFT);
+        Text rateLabel = new Text("Rate");
+        rateLabel.setFont(Font.font("System", FontWeight.BOLD, 11));
+        rateLabel.setFill(Color.web(MID));
+        ratingRow.getChildren().add(rateLabel);
+        for (int r = 1; r <= 5; r++) {
+            final int rating = r;
+            Button rateBtn = readerActionButton(String.valueOf(r), AMBER);
+            rateBtn.setOnAction(e -> {
+                rateBtn.setDisable(true);
+                new Thread(() -> {
+                    boolean ok = articleService.rateArticle(article, rating);
+                    Platform.runLater(() -> {
+                        rateBtn.setDisable(false);
+                        stats.setText(ratingText(article) + "  •  " + article.getReportCount() + " reports");
+                    });
+                }).start();
+            });
+            ratingRow.getChildren().add(rateBtn);
+        }
+
+        HBox reportRow = new HBox(8);
+        reportRow.setAlignment(Pos.CENTER_LEFT);
+        TextField reportField = new TextField();
+        reportField.setPromptText("Report reason");
+        reportField.setPrefWidth(420);
+        reportField.setStyle("-fx-background-color:rgba(255,255,255,0.05);-fx-text-fill:white;-fx-prompt-text-fill:#6B7280;-fx-border-color:rgba(255,255,255,0.12);-fx-border-radius:8;-fx-background-radius:8;");
+        Button reportBtn = readerActionButton("REPORT", RED);
+        reportBtn.setOnAction(e -> {
+            String reason = reportField.getText().trim();
+            if (reason.isEmpty()) reason = "Reader reported this article for admin review.";
+            reportBtn.setDisable(true);
+            final String cleanReason = reason;
+            new Thread(() -> {
+                boolean ok = articleService.reportArticle(article, user.getUsername(), cleanReason);
+                Platform.runLater(() -> {
+                    reportBtn.setDisable(false);
+                    if (ok) {
+                        reportField.clear();
+                        stats.setText(ratingText(article) + "  •  " + article.getReportCount() + " reports");
+                    }
+                });
+            }).start();
+        });
+        reportRow.getChildren().addAll(reportField, reportBtn);
+        moderationBox.getChildren().addAll(stats, ratingRow, reportRow);
+
+        TextArea body = new TextArea(emptyTo(article.getContent(), ""));
+        body.setWrapText(true);
+        body.setEditable(false);
+        body.setPrefRowCount(22);
+        body.setStyle(
+            "-fx-control-inner-background:#080E1A;" +
+            "-fx-background-color:#080E1A;" +
+            "-fx-text-fill:#D1D5DB;" +
+            "-fx-font-size:14px;" +
+            "-fx-border-color:rgba(255,255,255,0.08);"
+        );
+
+        root.getChildren().addAll(topicBadge, title, meta, moderationBox, body);
+        dialog.setScene(new Scene(root, 760, 640));
+        dialog.setTitle(emptyTo(article.getTitle(), "Article"));
+        dialog.show();
+    }
+
+    private Button readerActionButton(String text, String color) {
+        Button b = new Button(text);
+        b.setFont(Font.font("System", FontWeight.BOLD, 10));
+        b.setTextFill(Color.web(color));
+        b.setCursor(javafx.scene.Cursor.HAND);
+        b.setPadding(new Insets(6, 11, 6, 11));
+        b.setStyle("-fx-background-color:" + color + "1A;-fx-border-color:" + color + "55;-fx-border-width:1;-fx-border-radius:8;-fx-background-radius:8;");
+        return b;
+    }
+
+    private String ratingText(Article article) {
+        if (article.getRatingCount() == 0) return "No ratings yet";
+        return String.format("%.1f stars from %d ratings", article.getAverageRating(), article.getRatingCount());
+    }
+
+    private void updateArticleStats() {
+        int count = publishedArticles.size();
+        if (publishedStatText != null) publishedStatText.setText(String.valueOf(count));
+        if (feedSubtitle != null) {
+            feedSubtitle.setText(count == 1
+                ? "1 AI-authored article verified by system administrators"
+                : count + " AI-authored articles verified by system administrators");
+        }
+    }
+
+    private String estimateReadTime(Article article) {
+        String content = emptyTo(article.getContent(), "");
+        int words = content.isBlank() ? 1 : content.trim().split("\\s+").length;
+        int mins = Math.max(1, (int)Math.ceil(words / 220.0));
+        return mins + " min";
+    }
+
+    private String topicColor(String topic) {
+        String[] colors = {CYAN, TEAL, BLT, PURP, GREEN, AMBER, RED};
+        return colors[Math.abs(emptyTo(topic, "General").toLowerCase().hashCode()) % colors.length];
+    }
+
+    private String emptyTo(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     // =========================================================================

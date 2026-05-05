@@ -14,6 +14,7 @@ import javafx.scene.text.*;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
+  // ------------------- Main Interface implementation -----------------------
 public class AppLogin extends Application {
 
     private static final String DEEP_SPACE  = "#060A12";
@@ -31,7 +32,7 @@ public class AppLogin extends Application {
     private ProgressIndicator spinner;
     private TextField         emailField;
     private PasswordField     passField;
-    private Stage             primaryStage; // ← stored cleanly, no casting
+    private Stage             primaryStage; // stored cleanly, no casting
 
     @Override
     public void start(Stage stage) {
@@ -241,10 +242,9 @@ public class AppLogin extends Application {
         loginBtn.setOnMousePressed(e  -> { loginBtn.setScaleX(0.97); loginBtn.setScaleY(0.97); });
         loginBtn.setOnMouseReleased(e -> { loginBtn.setScaleX(1.0);  loginBtn.setScaleY(1.0);  });
 
-        // ── Clean wiring — no casting ─────────────────────────────────────────
+        // ── Clean wiring without casting 
         loginBtn.setOnAction(e -> handleLogin(emailField.getText().trim(), passField.getText()));
         passField.setOnAction(e -> handleLogin(emailField.getText().trim(), passField.getText()));
-        // ─────────────────────────────────────────────────────────────────────
 
         HBox btnRow = new HBox(12, spinner, loginBtn);
         btnRow.setAlignment(Pos.CENTER_LEFT);

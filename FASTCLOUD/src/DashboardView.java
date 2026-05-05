@@ -102,7 +102,7 @@ public class DashboardView {
         return container;
     }
 
-    // --- HELPER: Create the AI Card ---
+    // --- Create the AI Card ---
     private VBox createAICard(LogoConstituents tool) {
         VBox card = new VBox(15);
         card.setAlignment(Pos.CENTER);
