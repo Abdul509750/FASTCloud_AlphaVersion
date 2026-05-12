@@ -129,6 +129,7 @@ public class ArticleService {
             + "\"botName\":"     + sv(a.getBotName())  + ","
             + "\"topic\":"       + sv(a.getTopic())    + ","
             + "\"status\":"      + sv(a.getStatus())   + ","
+            + "\"requestedBy\":" + sv(a.getRequestedBy() == null ? "" : a.getRequestedBy()) + ","
             + "\"createdAt\":"   + "{\"integerValue\":\"" + a.getCreatedAt() + "\"},"
             + "\"ratingSum\":"   + "{\"integerValue\":\"" + a.getRatingSum() + "\"},"
             + "\"ratingCount\":" + "{\"integerValue\":\"" + a.getRatingCount() + "\"},"
@@ -166,6 +167,7 @@ public class ArticleService {
                 String botName  = extractField(block, "botName");
                 String topic    = extractField(block, "topic");
                 String status   = extractField(block, "status");
+                String reqBy    = extractField(block, "requestedBy");
                 long createdAt  = parseLong(block, "createdAt");
                 int ratingSum   = (int) parseLong(block, "ratingSum");
                 int ratingCount = (int) parseLong(block, "ratingCount");
@@ -175,6 +177,7 @@ public class ArticleService {
                 art.setRatingSum(ratingSum);
                 art.setRatingCount(ratingCount);
                 art.setReportCount(reportCount);
+                art.setRequestedBy(reqBy);
                 list.add(art);
             } catch (Exception ignored) {}
             docStart = findNextDocument(json, "/documents/articles/", docStart + 1);

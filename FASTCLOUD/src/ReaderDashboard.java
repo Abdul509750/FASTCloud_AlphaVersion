@@ -32,10 +32,14 @@ public class ReaderDashboard {
     private static final String[] NC   = {CYAN, BLT, PURP};
 
     //  Article data 
-    private final ArticleService articleService = new ArticleService();
-    private final BotService     botService     = new BotService();
-    private final List<Article>  publishedArticles = new ArrayList<>();
+    private final ArticleService        articleService        = new ArticleService();
+    private final BotService            botService            = new BotService();
+    private final ArticleRequestService articleRequestService = new ArticleRequestService();
+    private final BotEngine             botEngine             = new BotEngine();
+    private final List<Article>         publishedArticles     = new ArrayList<>();
+    private final List<BotPersona>      allBots               = new ArrayList<>();
     private final Map<String, BotPersona> authorsById = new HashMap<>();
+    private final List<Map<String, String>> myRequests = new ArrayList<>();
 
     //Current state
     private User       user;
@@ -43,6 +47,7 @@ public class ReaderDashboard {
     private int        activeSec = 0;
     private GridPane   articleGrid;
     private VBox       searchResults;
+    private VBox       requestsBox;
     private Label      resultCountLabel;
     private TextField  searchField;
     private Text       feedSubtitle;
@@ -142,13 +147,19 @@ public class ReaderDashboard {
         new Thread(() -> {
             List<Article> fresh = articleService.getPublishedArticles();
             List<BotPersona> authors = botService.getAllBots();
+            List<Map<String, String>> userReqs = articleRequestService.getRequestsByUser(user.getUsername());
             Platform.runLater(() -> {
                 publishedArticles.clear();
                 publishedArticles.addAll(fresh);
                 authorsById.clear();
+                allBots.clear();
+                allBots.addAll(authors);
                 for (BotPersona author : authors) authorsById.put(author.getId(), author);
+                myRequests.clear();
+                myRequests.addAll(userReqs);
                 refreshArticleGrid();
                 refreshSearchResults();
+                refreshRequestsBox();
                 updateArticleStats();
             });
         }).start();
@@ -456,6 +467,24 @@ public class ReaderDashboard {
         content.getChildren().add(articleGrid);
         refreshArticleGrid();
 
+        // === YOUR REQUESTS SECTION ===
+        HBox reqHdr = new HBox();
+        reqHdr.setPadding(new Insets(10,36,10,36));
+        reqHdr.setAlignment(Pos.CENTER_LEFT);
+        VBox reqTitle = new VBox(3);
+        Text rqt1 = new Text("YOUR ARTICLE REQUESTS");
+        rqt1.setFont(Font.font("System", FontWeight.BLACK, 15)); rqt1.setFill(Color.web(BRIGHT));
+        Text rqt2 = new Text("Track AI-generated articles you requested");
+        rqt2.setFont(Font.font("System", 11)); rqt2.setFill(Color.web(MID));
+        reqTitle.getChildren().addAll(rqt1, rqt2);
+        reqHdr.getChildren().add(reqTitle);
+        content.getChildren().add(reqHdr);
+
+        requestsBox = new VBox(10);
+        requestsBox.setPadding(new Insets(0,36,40,36));
+        content.getChildren().add(requestsBox);
+        refreshRequestsBox();
+
         ScrollPane sp = new ScrollPane(content);
         sp.setStyle("-fx-background-color:transparent;-fx-background:transparent;");
         sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
@@ -526,10 +555,27 @@ public class ReaderDashboard {
             sc.getChildren().addAll(sv, sl); heroStats.getChildren().add(sc);
         }
 
+        // REQUEST ARTICLE CTA Button
+        Button requestBtn = new Button("⊕  REQUEST ARTICLE");
+        requestBtn.setFont(Font.font("System", FontWeight.BOLD, 11));
+        requestBtn.setPrefHeight(36); requestBtn.setPadding(new Insets(0, 18, 0, 18));
+        requestBtn.setCursor(javafx.scene.Cursor.HAND);
+        String reqBase = "-fx-background-color:" + CYAN + ";-fx-text-fill:#060A12;-fx-background-radius:8;-fx-font-weight:bold;";
+        String reqHov  = "-fx-background-color:" + CYAN + "CC;-fx-text-fill:#060A12;-fx-background-radius:8;-fx-font-weight:bold;";
+        requestBtn.setStyle(reqBase);
+        requestBtn.setOnMouseEntered(e -> requestBtn.setStyle(reqHov));
+        requestBtn.setOnMouseExited(e  -> requestBtn.setStyle(reqBase));
+        requestBtn.setOnAction(e -> showRequestArticleDialog());
+
+        HBox heroActions = new HBox(12);
+        heroActions.setAlignment(Pos.CENTER_LEFT);
+        heroActions.getChildren().add(requestBtn);
+
         Region r1 = new Region(); r1.setPrefHeight(8);
         Region r2 = new Region(); r2.setPrefHeight(10);
-        Region r3 = new Region(); r3.setPrefHeight(14);
-        heroText.getChildren().addAll(chip, r1, titleLine1, titleLine2, subtitle, r2, accentLine, r3, heroStats);
+        Region r3 = new Region(); r3.setPrefHeight(8);
+        Region r4 = new Region(); r4.setPrefHeight(6);
+        heroText.getChildren().addAll(chip, r1, titleLine1, titleLine2, subtitle, r2, accentLine, r3, heroStats, r4, heroActions);
 
         heroText.setOpacity(0); heroText.setTranslateX(24);
         FadeTransition hft = new FadeTransition(Duration.millis(750), heroText);
@@ -936,6 +982,315 @@ public class ReaderDashboard {
 
     private String emptyTo(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    // =========================================================================
+    //  REQUEST ARTICLE — Dialog + Tracker
+    // =========================================================================
+    private void showRequestArticleDialog() {
+        Stage dialog = new Stage();
+        VBox root = new VBox(18);
+        root.setPadding(new Insets(36));
+        root.setStyle("-fx-background-color: #0A1020;");
+        root.setPrefWidth(460);
+
+        Text title = new Text("REQUEST AN ARTICLE");
+        title.setFont(Font.font("System", FontWeight.BLACK, 20));
+        title.setFill(new LinearGradient(0,0,1,0,true,CycleMethod.NO_CYCLE,
+            new Stop(0, Color.web(CYAN)), new Stop(1, Color.web(TEAL))));
+        title.setEffect(new Glow(0.3));
+
+        Text desc = new Text("Describe the topic you want and pick an AI author.\n"
+            + "The article will be generated by the LLM and sent to admins for approval.");
+        desc.setFont(Font.font("System", 12));
+        desc.setFill(Color.web(MID));
+        desc.setWrappingWidth(390);
+
+        // Topic input
+        Text topicLabel = new Text("ARTICLE TOPIC");
+        topicLabel.setFont(Font.font("System", FontWeight.BOLD, 9));
+        topicLabel.setFill(Color.web(MID));
+        TextField topicField = new TextField();
+        topicField.setPromptText("e.g. Quantum Entanglement, Black Holes, CRISPR Gene Editing...");
+        topicField.setPrefHeight(44);
+        topicField.setStyle(
+            "-fx-background-color: rgba(255,255,255,0.06);" +
+            "-fx-text-fill: white; -fx-prompt-text-fill: #374151;" +
+            "-fx-background-radius: 8; -fx-border-color: rgba(6,182,212,0.25);" +
+            "-fx-border-radius: 8; -fx-font-size: 13px; -fx-padding: 0 14;"
+        );
+        VBox topicGroup = new VBox(5, topicLabel, topicField);
+
+        // Author selector
+        Text authorLabel = new Text("PREFERRED AI AUTHOR");
+        authorLabel.setFont(Font.font("System", FontWeight.BOLD, 9));
+        authorLabel.setFill(Color.web(MID));
+        ComboBox<String> authorBox = new ComboBox<>();
+        // Populate with available bots
+        Map<String, BotPersona> nameToBot = new HashMap<>();
+        for (BotPersona bot : allBots) {
+            if (!"ACTIVE".equals(bot.getStatus()) && !"PAUSED".equals(bot.getStatus())) continue;
+            String display = bot.getName() + "  •  " + bot.getTopic() + "  •  " + bot.getStyle();
+            authorBox.getItems().add(display);
+            nameToBot.put(display, bot);
+        }
+        if (authorBox.getItems().isEmpty()) {
+            authorBox.getItems().add("No authors available");
+        }
+        authorBox.setValue(authorBox.getItems().get(0));
+        authorBox.setMaxWidth(Double.MAX_VALUE);
+        authorBox.setStyle(
+            "-fx-background-color: rgba(255,255,255,0.06);" +
+            "-fx-text-fill: white; -fx-border-color: rgba(6,182,212,0.25);" +
+            "-fx-border-radius: 8; -fx-background-radius: 8;"
+        );
+        VBox authorGroup = new VBox(5, authorLabel, authorBox);
+
+        // Status label
+        Label statusLabel = new Label();
+        statusLabel.setFont(Font.font("System", FontWeight.BOLD, 11));
+        statusLabel.setVisible(false);
+        statusLabel.setWrapText(true);
+
+        // Submit button
+        Button submitBtn = new Button("⊕  GENERATE ARTICLE");
+        submitBtn.setFont(Font.font("System", FontWeight.BOLD, 12));
+        submitBtn.setPrefHeight(42);
+        submitBtn.setPadding(new Insets(0, 22, 0, 22));
+        submitBtn.setCursor(javafx.scene.Cursor.HAND);
+        String sBase = "-fx-background-color:" + CYAN + ";-fx-text-fill:#060A12;-fx-background-radius:8;-fx-font-weight:bold;";
+        String sHov  = "-fx-background-color:" + CYAN + "CC;-fx-text-fill:#060A12;-fx-background-radius:8;-fx-font-weight:bold;";
+        submitBtn.setStyle(sBase);
+        submitBtn.setOnMouseEntered(e -> submitBtn.setStyle(sHov));
+        submitBtn.setOnMouseExited(e  -> submitBtn.setStyle(sBase));
+
+        submitBtn.setOnAction(e -> {
+            String topic2 = topicField.getText().trim();
+            if (topic2.isEmpty()) {
+                statusLabel.setText("Please enter a topic.");
+                statusLabel.setTextFill(Color.web(RED));
+                statusLabel.setVisible(true);
+                return;
+            }
+            BotPersona selectedBot = nameToBot.get(authorBox.getValue());
+            if (selectedBot == null) {
+                statusLabel.setText("No valid author selected. Ask admin to spawn bots first.");
+                statusLabel.setTextFill(Color.web(RED));
+                statusLabel.setVisible(true);
+                return;
+            }
+
+            submitBtn.setText("⟳  GENERATING...");
+            submitBtn.setDisable(true);
+            statusLabel.setText("Sending request to AI... Please wait.");
+            statusLabel.setTextFill(Color.web(AMBER));
+            statusLabel.setVisible(true);
+
+            // 1. Save request to Firestore as PENDING
+            new Thread(() -> {
+                String reqId = articleRequestService.saveRequest(
+                    topic2, selectedBot.getId(), selectedBot.getName(), user.getUsername());
+
+                if (reqId == null) {
+                    Platform.runLater(() -> {
+                        statusLabel.setText("Failed to save request. Try again.");
+                        statusLabel.setTextFill(Color.web(RED));
+                        submitBtn.setText("⊕  GENERATE ARTICLE");
+                        submitBtn.setDisable(false);
+                    });
+                    return;
+                }
+
+                // 2. Update status to GENERATING
+                articleRequestService.updateRequestStatus(reqId, "GENERATING", "");
+
+                Platform.runLater(() -> {
+                    statusLabel.setText("Request saved. AI is writing your article...");
+                    statusLabel.setTextFill(Color.web(CYAN));
+                });
+
+                // 3. Call BotEngine to generate article on-demand
+                botEngine.generateArticleOnDemand(topic2, selectedBot, user.getUsername(),
+                    (article, success, errorMsg) -> {
+                        if (success && article != null) {
+                            // 4. Update request as COMPLETED
+                            new Thread(() -> {
+                                articleRequestService.updateRequestStatus(reqId, "COMPLETED", article.getId());
+                                // Refresh requests
+                                List<Map<String, String>> freshReqs =
+                                    articleRequestService.getRequestsByUser(user.getUsername());
+                                Platform.runLater(() -> {
+                                    myRequests.clear();
+                                    myRequests.addAll(freshReqs);
+                                    refreshRequestsBox();
+                                });
+                            }).start();
+
+                            statusLabel.setText("✓ Article generated: \"" + article.getTitle()
+                                + "\"\nIt's now awaiting admin approval before publishing.");
+                            statusLabel.setTextFill(Color.web(GREEN));
+                            submitBtn.setText("✓  DONE");
+                            topicField.clear();
+
+                            // Auto-close after short delay
+                            Timeline autoClose = new Timeline(
+                                new KeyFrame(Duration.seconds(4), ev -> dialog.close()));
+                            autoClose.play();
+                        } else {
+                            // 5. Mark request as FAILED
+                            new Thread(() ->
+                                articleRequestService.updateRequestStatus(reqId, "FAILED", "")
+                            ).start();
+
+                            statusLabel.setText("✗ Generation failed: "
+                                + (errorMsg != null ? errorMsg : "Unknown error"));
+                            statusLabel.setTextFill(Color.web(RED));
+                            submitBtn.setText("⊕  GENERATE ARTICLE");
+                            submitBtn.setDisable(false);
+                        }
+                    });
+            }).start();
+        });
+
+        // Info note
+        HBox infoRow = new HBox(8);
+        infoRow.setAlignment(Pos.CENTER_LEFT);
+        Circle infoDot = new Circle(3.5, Color.web(CYAN, 0.6));
+        Text infoText = new Text("Generated articles are saved as drafts and require admin approval before publishing.");
+        infoText.setFont(Font.font("System", 10));
+        infoText.setFill(Color.web(DIM));
+        infoText.setWrappingWidth(380);
+        infoRow.getChildren().addAll(infoDot, infoText);
+
+        root.getChildren().addAll(title, desc, topicGroup, authorGroup, statusLabel, submitBtn, infoRow);
+
+        dialog.setScene(new Scene(root));
+        dialog.setTitle("Request Article — Aqalnama");
+        dialog.show();
+    }
+
+    private void refreshRequestsBox() {
+        if (requestsBox == null) return;
+        requestsBox.getChildren().clear();
+
+        if (myRequests.isEmpty()) {
+            Text empty = new Text("You haven't requested any articles yet. Click \"REQUEST ARTICLE\" above to get started.");
+            empty.setFont(Font.font("System", 12));
+            empty.setFill(Color.web(MID));
+            empty.setWrappingWidth(700);
+            requestsBox.getChildren().add(empty);
+            return;
+        }
+
+        for (int i = 0; i < myRequests.size(); i++) {
+            Map<String, String> req = myRequests.get(i);
+            HBox row = buildRequestRow(req);
+            // Animate in
+            row.setOpacity(0); row.setTranslateX(-12);
+            FadeTransition ft = new FadeTransition(Duration.millis(350), row);
+            ft.setDelay(Duration.millis(50 + i * 40)); ft.setToValue(1.0);
+            TranslateTransition tt = new TranslateTransition(Duration.millis(350), row);
+            tt.setDelay(Duration.millis(50 + i * 40)); tt.setToX(0);
+            tt.setInterpolator(Interpolator.EASE_OUT);
+            new ParallelTransition(ft, tt).play();
+            requestsBox.getChildren().add(row);
+        }
+    }
+
+    private HBox buildRequestRow(Map<String, String> req) {
+        String topic  = emptyTo(req.get("topic"), "Unknown Topic");
+        String author = emptyTo(req.get("preferredBotName"), "AI Author");
+        String status = emptyTo(req.get("status"), "PENDING");
+
+        String statusColor = switch (status) {
+            case "PENDING"    -> AMBER;
+            case "GENERATING" -> CYAN;
+            case "COMPLETED"  -> GREEN;
+            case "FAILED"     -> RED;
+            default           -> MID;
+        };
+
+        String statusIcon = switch (status) {
+            case "PENDING"    -> "◌";
+            case "GENERATING" -> "⟳";
+            case "COMPLETED"  -> "✓";
+            case "FAILED"     -> "✗";
+            default           -> "•";
+        };
+
+        HBox row = new HBox(14);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(14, 18, 14, 18));
+        String rowBase = "-fx-background-color:rgba(6,12,26,0.85);-fx-background-radius:10;" +
+            "-fx-border-color:" + statusColor + "28;-fx-border-width:1;-fx-border-radius:10;";
+        row.setStyle(rowBase);
+
+        // Status accent bar
+        Rectangle accent = new Rectangle(4, 42);
+        accent.setArcWidth(4); accent.setArcHeight(4);
+        accent.setFill(Color.web(statusColor));
+        accent.setEffect(new Glow(0.5));
+
+        // Info
+        VBox info = new VBox(4);
+        HBox.setHgrow(info, Priority.ALWAYS);
+        Text topicT = new Text(topic);
+        topicT.setFont(Font.font("System", FontWeight.BOLD, 13));
+        topicT.setFill(Color.web(BRIGHT));
+
+        HBox meta = new HBox(8);
+        meta.setAlignment(Pos.CENTER_LEFT);
+        Text authorT = new Text("Author: " + author);
+        authorT.setFont(Font.font("System", 10));
+        authorT.setFill(Color.web(LIGHT));
+        Text sepT = new Text("•");
+        sepT.setFill(Color.web(DIM));
+
+        // Format time
+        String timeStr = "Unknown";
+        try {
+            long createdAt = Long.parseLong(req.getOrDefault("createdAt", "0"));
+            if (createdAt > 0) {
+                long ageMins = (System.currentTimeMillis() - createdAt) / 60000;
+                if (ageMins < 1) timeStr = "Just now";
+                else if (ageMins < 60) timeStr = ageMins + " min ago";
+                else if (ageMins < 1440) timeStr = (ageMins / 60) + " hr ago";
+                else timeStr = (ageMins / 1440) + " days ago";
+            }
+        } catch (Exception ignored) {}
+        Text timeT = new Text(timeStr);
+        timeT.setFont(Font.font("System", 10));
+        timeT.setFill(Color.web(DIM));
+
+        meta.getChildren().addAll(authorT, sepT, timeT);
+        info.getChildren().addAll(topicT, meta);
+
+        // Status badge
+        Label statusBadge = new Label(statusIcon + "  " + status);
+        statusBadge.setFont(Font.font("System", FontWeight.BOLD, 9));
+        statusBadge.setTextFill(Color.web(statusColor));
+        statusBadge.setPadding(new Insets(4, 12, 4, 12));
+        statusBadge.setStyle("-fx-background-color:" + statusColor + "1A;" +
+            "-fx-border-color:" + statusColor + "50;-fx-border-width:1;" +
+            "-fx-border-radius:20;-fx-background-radius:20;");
+
+        // Pulse animation for GENERATING status
+        if ("GENERATING".equals(status)) {
+            FadeTransition pulse = new FadeTransition(Duration.seconds(1), statusBadge);
+            pulse.setFromValue(0.5); pulse.setToValue(1.0);
+            pulse.setAutoReverse(true); pulse.setCycleCount(Animation.INDEFINITE);
+            pulse.play();
+        }
+
+        row.getChildren().addAll(accent, info, statusBadge);
+
+        // Hover effect
+        String rowHov = "-fx-background-color:rgba(6,182,212,0.06);-fx-background-radius:10;" +
+            "-fx-border-color:" + statusColor + "55;-fx-border-width:1;-fx-border-radius:10;";
+        row.setOnMouseEntered(e -> row.setStyle(rowHov));
+        row.setOnMouseExited(e  -> row.setStyle(rowBase));
+
+        return row;
     }
 
     // =========================================================================

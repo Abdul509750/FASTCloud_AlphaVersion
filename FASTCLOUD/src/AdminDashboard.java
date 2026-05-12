@@ -11,6 +11,7 @@ import javafx.scene.shape.*;
 import javafx.scene.text.*;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+
 import java.util.*;
 
 public class AdminDashboard {
@@ -666,6 +667,18 @@ public class AdminDashboard {
             chipText("•", DIM),
             chipText(article.getReportCount() + " reports", article.getReportCount() > 0 ? RED : MID)
         );
+        // Show "USER REQUESTED" badge if this article was requested by a reader
+        String reqBy = article.getRequestedBy();
+        if (reqBy != null && !reqBy.isBlank()) {
+            meta.getChildren().add(chipText("•", DIM));
+            Label reqBadge = new Label("⊕ REQUESTED BY: " + reqBy.toUpperCase());
+            reqBadge.setFont(Font.font("System", FontWeight.BOLD, 8));
+            reqBadge.setTextFill(Color.web(CYAN));
+            reqBadge.setPadding(new Insets(2, 8, 2, 8));
+            reqBadge.setStyle("-fx-background-color:" + CYAN + "1A;-fx-border-color:" + CYAN + "55;"
+                + "-fx-border-width:1;-fx-border-radius:12;-fx-background-radius:12;");
+            meta.getChildren().add(reqBadge);
+        }
         info.getChildren().addAll(titleT, meta);
 
         // Action buttons based on status

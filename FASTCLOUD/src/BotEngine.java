@@ -118,6 +118,89 @@ public class BotEngine {
     }
 
     // =========================================================================
+    //  ON-DEMAND article generation (user-requested)
+    // =========================================================================
+    public interface OnRequestComplete {
+        void onComplete(Article article, boolean success, String errorMsg);
+    }
+
+    /**
+     * Generate an article on-demand for a user request.
+     * Runs in a background thread; callback fires on JavaFX thread.
+     */
+    public void generateArticleOnDemand(String topic, BotPersona bot,
+                                         String requestedBy, OnRequestComplete callback) {
+        new Thread(() -> {
+            try {
+                System.out.println("[BotEngine] On-demand request by " + requestedBy
+                    + " | Topic: " + topic + " | Author: " + bot.getName());
+
+                String prompt = buildOnDemandPrompt(topic, bot);
+                String raw    = callGroq(prompt);
+                if (raw == null || raw.isEmpty()) {
+                    fireCallback(callback, null, false, "LLM returned empty response.");
+                    return;
+                }
+
+                String[] parsed  = parseTitleAndContent(raw);
+                String   title   = parsed[0];
+                String   content = parsed[1];
+
+                Article article = new Article(
+                    null, title, content,
+                    bot.getId(), bot.getName(), topic,
+                    "DRAFT", System.currentTimeMillis()
+                );
+                article.setRequestedBy(requestedBy);
+
+                String newId = articleService.saveArticle(article);
+                if (newId == null) {
+                    fireCallback(callback, null, false, "Failed to save article to Firestore.");
+                    return;
+                }
+                article.setId(newId);
+
+                // Update bot's article count
+                int newCount = bot.getArticleCount() + 1;
+                bot.setArticleCount(newCount);
+                bot.setLastRun(System.currentTimeMillis());
+                botService.updateBotAfterWrite(bot.getId(), newCount);
+
+                if (listener != null) {
+                    javafx.application.Platform.runLater(() ->
+                        listener.onArticle(bot, article));
+                }
+
+                System.out.println("[BotEngine] On-demand article saved: " + title);
+                fireCallback(callback, article, true, null);
+
+            } catch (Exception e) {
+                System.out.println("[BotEngine] On-demand error: " + e.getMessage());
+                fireCallback(callback, null, false, e.getMessage());
+            }
+        }).start();
+    }
+
+    private void fireCallback(OnRequestComplete cb, Article article, boolean success, String err) {
+        if (cb != null) {
+            javafx.application.Platform.runLater(() -> cb.onComplete(article, success, err));
+        }
+    }
+
+    /** Build a focused prompt for user-requested topic */
+    private String buildOnDemandPrompt(String topic, BotPersona bot) {
+        return "You are " + bot.getName() + ", an AI author for Aqalnama "
+            + "an AI-driven encyclopedia. A reader has specifically requested "
+            + "an article about: " + topic + ". "
+            + "Write a detailed, well-structured encyclopedia article about this exact topic. "
+            + "Writing style: " + bot.getStyle() + ". "
+            + "Format your response EXACTLY as:\n"
+            + "TITLE: [article title here]\n"
+            + "CONTENT:\n[full article content here, minimum 300 words, "
+            + "structured with clear paragraphs, no markdown symbols like ** or #]";
+    }
+
+    // =========================================================================
     //  BUILD PROMPT for the bg llm
     // =========================================================================
     private String buildPrompt(BotPersona bot) {

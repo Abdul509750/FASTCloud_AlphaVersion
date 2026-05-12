@@ -6,6 +6,7 @@ public class Article {
     private String botName;
     private String topic;
     private String status; // DRAFT, AUTHENTICATED, PUBLISHED
+    private String requestedBy; // empty = auto-generated, otherwise = requesting user's username
     private long   createdAt;
     private int    ratingSum;
     private int    ratingCount;
@@ -16,17 +17,18 @@ public class Article {
     public Article(String id, String title, String content,
                    String botId, String botName, String topic,
                    String status, long createdAt) {
-        this.id        = id;
-        this.title     = title;
-        this.content   = content;
-        this.botId     = botId;
-        this.botName   = botName;
-        this.topic     = topic;
-        this.status    = status;
-        this.createdAt = createdAt;
-        this.ratingSum = 0;
+        this.id          = id;
+        this.title       = title;
+        this.content     = content;
+        this.botId       = botId;
+        this.botName     = botName;
+        this.topic       = topic;
+        this.status      = status;
+        this.createdAt   = createdAt;
+        this.ratingSum   = 0;
         this.ratingCount = 0;
         this.reportCount = 0;
+        this.requestedBy = "";
     }
 
     public String getId()        { return id; }
@@ -40,6 +42,7 @@ public class Article {
     public int    getRatingSum() { return ratingSum; }
     public int    getRatingCount() { return ratingCount; }
     public int    getReportCount() { return reportCount; }
+    public String getRequestedBy() { return requestedBy; }
     public double getAverageRating() {
         return ratingCount == 0 ? 0.0 : ratingSum / (double) ratingCount;
     }
@@ -51,4 +54,5 @@ public class Article {
     public void setRatingSum(int ratingSum) { this.ratingSum = ratingSum; }
     public void setRatingCount(int ratingCount) { this.ratingCount = ratingCount; }
     public void setReportCount(int reportCount) { this.reportCount = reportCount; }
+    public void setRequestedBy(String requestedBy) { this.requestedBy = requestedBy; }
 }
